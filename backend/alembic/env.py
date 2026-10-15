@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from logging.config import fileConfig
 
+import app.domains.market_data.persistence as market_persistence
 from alembic import context
 from app.core.config import get_settings
 from app.core.database import Base
 from sqlalchemy import engine_from_config, pool
+
+_ = market_persistence.MarketRow
 
 config = context.config
 

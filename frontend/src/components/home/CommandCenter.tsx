@@ -1,6 +1,7 @@
 import { ApiStatus } from "@/components/home/ApiStatus";
 import { ChartWorkspace } from "@/components/home/ChartWorkspace";
 import { CopilotPanel } from "@/components/home/CopilotPanel";
+import { VerifiedMarket } from "@/components/home/VerifiedMarket";
 import { PageHeader, Panel } from "@/components/ui/primitives";
 import { StatusVocabulary } from "@/components/ui/StatusVocabulary";
 import { COMMAND_QUESTIONS, DEMO_PANELS } from "@/content/home";
@@ -16,9 +17,12 @@ export function CommandCenter() {
         />
         <ApiStatus />
         <ol className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-          {COMMAND_QUESTIONS.map((item, index) => (
+          <li className="border-moss border-t pt-3">
+            <VerifiedMarket />
+          </li>
+          {COMMAND_QUESTIONS.slice(1).map((item, index) => (
             <li key={item.question} className="border-moss border-t pt-3">
-              <p className="text-muted text-xs tracking-[0.14em] uppercase">0{index + 1}</p>
+              <p className="text-muted text-xs tracking-[0.14em] uppercase">0{index + 2}</p>
               <p className="mt-2 text-sm text-ink">{item.question}</p>
               <p className="mt-2 font-serif text-lg text-moss">{item.answer}</p>
             </li>

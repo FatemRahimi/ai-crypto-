@@ -11,8 +11,9 @@ Browser (Next.js, TypeScript, React, Tailwind)
 FastAPI application
         │
         ├── health and platform routes
+        ├── read-only market-data routes
         ├── domain boundaries
-        └── PostgreSQL (connectivity only in this phase)
+        └── PostgreSQL (connectivity and canonical market observations)
 ```
 
 The browser never receives database credentials, `APP_SECRET_KEY`, or an exchange secret. The only frontend environment value is `NEXT_PUBLIC_API_URL`.
@@ -26,7 +27,7 @@ Each domain under `backend/app/domains/` owns a written boundary: what it is for
 | identity | planned | No login or session |
 | accounts | planned | No ledger and no custody |
 | connections | planned | No exchange connection |
-| market_data | planned | No feed |
+| market_data | foundation | Public BTC/USDT spot observations. No indicators. |
 | market_intelligence | planned | No interpretation |
 | strategies | planned | No stored or compiled strategy |
 | quant | planned | No backtest or probability model |
@@ -71,15 +72,18 @@ The AI package is scanned by test to ensure it does not reference the gateway, t
 | GET | `/health/live` | Process is up. Does not touch the database. |
 | GET | `/health/ready` | 200 when PostgreSQL answers `SELECT 1`, otherwise 503. Execution is reported disabled. |
 | GET | `/api/v1/platform` | Phase, constitution flags, pipeline, domain boundaries. |
+| GET | `/api/v1/market-data/status` | Stored BTC/USDT coverage, freshness, stream disconnected. |
+| GET | `/api/v1/market-data/candles` | Verified candles in UTC order. Empty list when none are stored. |
+| GET | `/api/v1/market-data/latest` | Newest verified trade or closed candle, or an explicit empty price. |
 | GET | `/docs`, `/openapi.json` | Present when `APP_ENV` is `local` or `test`. Absent in `production`. |
 
 CORS allows GET and OPTIONS from the configured origins only. Credentials are not allowed. There is no cookie session.
 
 ## Persistence
 
-SQLAlchemy 2 and Alembic are wired. The declarative base has no mapped tables. Revision `20261014_0001` establishes the migration chain and creates no domain tables. `alembic upgrade head` therefore creates `alembic_version` only, once PostgreSQL is reachable.
+SQLAlchemy 2 and Alembic are wired. Revision `20261014_0001` creates no domain tables. Revision `20261015_0002` adds the market-observation tables. Strategies, orders, and audit rows are still absent. See `docs/DATA_ARCHITECTURE.md`.
 
-Market candles, strategies, orders, and audit rows are not invented early. Each arrives with the phase that owns the data. See `docs/DATA_ARCHITECTURE.md`.
+Public ingestion is a manual command, not a background worker. The read API serves stored rows and does not call Binance during a request.
 
 ## Web application
 

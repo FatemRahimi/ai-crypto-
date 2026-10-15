@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     database_url: str = (
         "postgresql+psycopg://aicrypto:local_dev_change_me@127.0.0.1:5432/aicrypto"
     )
+    market_data_base_url: str = "https://data-api.binance.vision"
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     log_level: str = "INFO"
     debug: bool = False
@@ -63,6 +64,14 @@ class Settings(BaseSettings):
         if not host:
             raise ValueError("API_HOST must not be empty")
         return host
+
+    @field_validator("market_data_base_url")
+    @classmethod
+    def require_public_market_data_url(cls, value: str) -> str:
+        url = value.strip().rstrip("/")
+        if not url.startswith("https://"):
+            raise ValueError("MARKET_DATA_BASE_URL must use https")
+        return url
 
     @field_validator("database_url")
     @classmethod

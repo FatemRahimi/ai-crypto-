@@ -12,6 +12,8 @@ BOUNDARY = DomainBoundary(
         "Synthesize a price and present it as a last trade",
         "Serve an estimate without labeling its source",
     ],
-    implementation_status=ImplementationStatus.PLANNED,
-    phase_note="No market feed is connected.",
+    implementation_status=ImplementationStatus.FOUNDATION,
+    phase_note=(
+        "Public Binance spot BTC/USDT candles, recent trades, and book snapshots. No credentials."
+    ),
 )
