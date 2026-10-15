@@ -110,3 +110,12 @@ Status: accepted
 `backend/app/core/config.py` resolves `Path(__file__).parents[3]` to the repository root and loads `<root>/.env`. `parents[2]` is the `backend` directory, and `parents[4]` is outside the repository. That index was verified and left unchanged.
 
 The process still failed to start from the local file because `APP_ENV=development` is not one of `local`, `test`, or `production`. Settings refused to build, so Alembic never received `DATABASE_URL` from that file. The local file now uses `APP_ENV=local`. The database password was not changed.
+
+## D016 — Phase 2 public BTC market data
+
+Date: 2026-10-15
+Status: accepted
+
+Phase 2 stores spot BTC/USDT only. The provider is Binance's public market-data host, which documents unauthenticated klines, recent trades, and book ticker. No account credentials are added. A provider interface keeps that payload out of the canonical tables.
+
+PostgreSQL remains the store. TimescaleDB, Kafka, and a live socket are not introduced. The public trade stream is recorded as Phase 2.1. Timestamps are UTC. Persisted prices and quantities are decimals. Invalid observations are rejected. Missing candles are reported as gaps and are not fabricated. Read endpoints return stored rows only, including an explicit empty state when nothing verified is on file. Execution stays disabled and custody stays none.

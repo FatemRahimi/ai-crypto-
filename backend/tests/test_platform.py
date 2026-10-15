@@ -48,12 +48,19 @@ def test_platform_reports_phase1_posture(client: TestClient) -> None:
     assert by_key["execution"]["implementation_status"] == "disabled"
     assert by_key["risk"]["implementation_status"] == "disabled"
     assert by_key["ai"]["implementation_status"] == "foundation"
-    assert by_key["market_data"]["implementation_status"] == "planned"
+    assert by_key["market_data"]["implementation_status"] == "foundation"
 
 
 def test_openapi_exposes_only_foundation_routes(app: FastAPI) -> None:
     schema = app.openapi()
-    assert set(schema["paths"]) == {"/health/live", "/health/ready", "/api/v1/platform"}
+    assert set(schema["paths"]) == {
+        "/health/live",
+        "/health/ready",
+        "/api/v1/platform",
+        "/api/v1/market-data/status",
+        "/api/v1/market-data/candles",
+        "/api/v1/market-data/latest",
+    }
 
 
 def test_production_hides_api_docs() -> None:

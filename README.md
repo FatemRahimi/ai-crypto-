@@ -80,7 +80,15 @@ NEXT_PUBLIC_API_URL=http://127.0.0.1:8001
 
 Restart both processes after changing those values. `python -m app` does not read the frontend file, and the frontend does not read `API_PORT`.
 
-`alembic upgrade head` creates Alembic's version table only. Phase 1 has no market, account, or trade tables. If PostgreSQL rejects the connection, that command fails and the API can still be used. Readiness stays degraded.
+`alembic upgrade head` applies the version table and the BTC market-data tables. If PostgreSQL rejects the connection, that command fails and the API can still be used. Readiness stays degraded and market routes report the store as unavailable.
+
+A small public BTC/USDT ingest, with no API key:
+
+```powershell
+.\.venv\Scripts\python -m app.domains.market_data --interval 1m --limit 5
+```
+
+That stores up to five closed one-minute candles. Add `--dataset trades` or `--dataset book` for one small recent-trade or book-ticker request. A start and end must be timezone-aware, and a range above 1000 candles is refused unless `--max-candles` is raised, never above 5000.
 
 ### 4. Frontend
 
@@ -116,7 +124,7 @@ cd backend
 .\.venv\Scripts\python -m pip_audit --progress-spinner off
 ```
 
-If `pip-audit` fails with `CERTIFICATE_VERIFY_FAILED`, point `REQUESTS_CA_BUNDLE` and `SSL_CERT_FILE` at a PEM export of the Windows root store and run it again. Do not disable certificate verification.
+If `pip-audit` or the public market-data client fails with a certificate error, point `SSL_CERT_FILE` at a PEM export of the Windows root store and run the command again. Do not disable certificate verification. The market-data client uses that bundle when the variable is set.
 
 Frontend:
 
