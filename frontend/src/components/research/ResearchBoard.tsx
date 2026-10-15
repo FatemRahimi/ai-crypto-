@@ -1,4 +1,5 @@
 import { RESEARCH_SECTIONS } from "@/content/workspace";
+import { TechnicalEvidence } from "@/components/research/TechnicalEvidence";
 import { EmptyNote, PageHeader } from "@/components/ui/primitives";
 
 export function ResearchBoard() {
@@ -7,7 +8,7 @@ export function ResearchBoard() {
       <PageHeader
         eyebrow="Research"
         title="Evidence, when it exists"
-        summary="Advanced studies stay closed until you open them. None of these sections has a data source in Phase 1."
+        summary="Technical measurements appear only when a stored calculator result exists. The other sections have no data source."
       />
       <div className="space-y-3">
         {RESEARCH_SECTIONS.map((section) => (
@@ -15,14 +16,23 @@ export function ResearchBoard() {
             <summary className="cursor-pointer font-serif text-xl text-ink">
               {section.title}
             </summary>
-            <EmptyNote>
-              <span className="mt-3 block">No evidence connected.</span>
-            </EmptyNote>
+            {section.id === "technical" ? (
+              <TechnicalEvidence />
+            ) : (
+              <EmptyNote>
+                <span className="mt-3 block">No evidence connected.</span>
+              </EmptyNote>
+            )}
             <ul className="text-muted mt-3 list-disc space-y-1 pl-5 text-sm">
               {section.topics.map((topic) => (
                 <li key={topic}>{topic}</li>
               ))}
             </ul>
+            {section.id === "technical" ? (
+              <p className="text-muted mt-3 text-sm">
+                Supply, demand, liquidity, and Fibonacci are not calculated.
+              </p>
+            ) : null}
           </details>
         ))}
       </div>

@@ -11,7 +11,12 @@ BOUNDARY = DomainBoundary(
     must_not=[
         "Emit an exchange order",
         "Claim structure without a market-data reference",
+        "Store a language-model measurement",
+        "Emit a trade recommendation or a probability",
     ],
-    implementation_status=ImplementationStatus.PLANNED,
-    phase_note="No market interpretation is implemented.",
+    implementation_status=ImplementationStatus.FOUNDATION,
+    phase_note=(
+        "Phase 3A stores deterministic technical evidence from verified candles. "
+        "No profile, order flow, derivatives, or LLM measurement."
+    ),
 )

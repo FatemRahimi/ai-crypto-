@@ -49,6 +49,7 @@ def test_platform_reports_phase1_posture(client: TestClient) -> None:
     assert by_key["risk"]["implementation_status"] == "disabled"
     assert by_key["ai"]["implementation_status"] == "foundation"
     assert by_key["market_data"]["implementation_status"] == "foundation"
+    assert by_key["market_intelligence"]["implementation_status"] == "foundation"
 
 
 def test_openapi_exposes_only_foundation_routes(app: FastAPI) -> None:
@@ -60,6 +61,8 @@ def test_openapi_exposes_only_foundation_routes(app: FastAPI) -> None:
         "/api/v1/market-data/status",
         "/api/v1/market-data/candles",
         "/api/v1/market-data/latest",
+        "/api/v1/technical-evidence",
+        "/api/v1/technical-evidence/latest",
     }
 
 

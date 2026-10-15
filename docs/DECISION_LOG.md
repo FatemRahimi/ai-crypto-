@@ -119,3 +119,10 @@ Status: accepted
 Phase 2 stores spot BTC/USDT only. The provider is Binance's public market-data host, which documents unauthenticated klines, recent trades, and book ticker. No account credentials are added. A provider interface keeps that payload out of the canonical tables.
 
 PostgreSQL remains the store. TimescaleDB, Kafka, and a live socket are not introduced. The public trade stream is recorded as Phase 2.1. Timestamps are UTC. Persisted prices and quantities are decimals. Invalid observations are rejected. Missing candles are reported as gaps and are not fabricated. Read endpoints return stored rows only, including an explicit empty state when nothing verified is on file. Execution stays disabled and custody stays none.
+
+## D017 — Phase 3A is deterministic technical evidence
+
+Date: 2026-10-16
+Status: accepted
+
+Technical evidence is calculated only from verified Phase 2 candles and stored in `technical_evidence`, not on the candle rows. The first calculators are strict confirmed pivots, structure labels, exact pivot support and resistance, range statistics, and a candle-proxy VWAP. A pivot waits for its later candles. Gaps are not filled. Recalculation of the same inputs, parameters, and calculator version does not create another row. The read API does not call the provider or run a calculator. No language-model measurement, probability, or trade recommendation is produced. Market profile, order flow, and derivatives stay unimplemented. Execution stays disabled and custody stays none.

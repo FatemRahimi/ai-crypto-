@@ -5,18 +5,21 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.market_data import MarketReader, register_market_routes
 from app.api.routes import register_routes
+from app.api.technical_evidence import EvidenceReader, register_evidence_routes
 from app.core.config import Settings, get_settings
 from app.core.database import DatabaseProbe, build_database_probe
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
 from app.domains.market_data.service import MarketDataService
+from app.domains.market_intelligence.service import TechnicalEvidenceService
 
 
 def create_app(
     settings: Settings | None = None,
     database_probe: DatabaseProbe | None = None,
     market_data: MarketReader | None = None,
+    evidence: EvidenceReader | None = None,
 ) -> FastAPI:
     resolved = settings or get_settings()
     configure_logging(resolved.log_level)
@@ -41,6 +44,7 @@ def create_app(
     register_exception_handlers(app)
     register_routes(app, resolved, probe)
     register_market_routes(app, market_data or MarketDataService.from_settings(resolved))
+    register_evidence_routes(app, evidence or TechnicalEvidenceService.from_settings(resolved))
     return app
 
 

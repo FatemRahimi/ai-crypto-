@@ -59,6 +59,22 @@ The documented public trade stream `wss://data-stream.binance.vision/ws/btcusdt@
 
 Likely later pressure is tick volume, not request shape. Indexes are `(market_id, interval, open_time)` for candles and `(market_id, event_time)` for trades. Bulk candle inserts use one statement per batch.
 
+## Phase 3A technical evidence
+
+Phase 3A calculates deterministic evidence from verified `market_candles` rows. It does not store measurements on those rows. Market profile, order flow, derivatives, and language-model measurements are not implemented.
+
+`technical_evidence` stores the evidence type, market, interval, observation time, calculation time, calculator name, calculator version `technical-evidence-v1`, canonical parameters and their SHA-256, the input candle id list and open-time span, the result JSON, and a stable data status. Observation time is the close time of the last input candle. Ingestion time is not used. Decimals are JSON strings.
+
+A pivot high or low uses a strict fractal: the candle must exceed every neighbor in `left` earlier candles and `right` later candles. It is not emitted until those later candles exist. Confirmation time is the close of the last required later candle. Successive confirmed highs are labeled higher high, lower high, or equal high. Successive confirmed lows use the same comparison. Those labels are not orders.
+
+Support and resistance candidates are the exact prices of confirmed pivot lows and highs. `touch_count` is how many confirmed pivots share that exact price. It is not a strength rating.
+
+Range statistics are the maximum high, minimum low, their difference, their midpoint, and the difference as a percentage of the low. Candle VWAP is the volume-weighted average of `(high + low + close) / 3`, using candle base volume. It is labeled `candle_proxy_not_trade_vwap`. Zero total volume returns insufficient and no VWAP.
+
+A missing candle in the input window returns `GAP_DETECTED` and no filled measurement. Too few candles, or no candles, returns insufficient; a run with no observation time is not stored. Duplicate open times and naive timestamps are invalid and are not stored. `VALID` measurements are marked stale when read if the observation is older than two intervals. The same market, type, interval, observation, calculator version, and parameters do not insert a second row. A different result for that identity is a conflict and the stored row is kept.
+
+The supported intervals are the Phase 2 intervals. The calculators are shared across those intervals.
+
 ## Migration rule
 
 Alembic revisions are the only schema change path. Revision `20261014_0001` is intentionally empty of domain tables. The next revision should belong to the first domain that truly persists something, which is expected to be market data or the identity gate, not a speculative schema for every future table.

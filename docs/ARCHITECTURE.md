@@ -12,6 +12,7 @@ FastAPI application
         │
         ├── health and platform routes
         ├── read-only market-data routes
+        ├── read-only technical-evidence routes
         ├── domain boundaries
         └── PostgreSQL (connectivity and canonical market observations)
 ```
@@ -27,8 +28,8 @@ Each domain under `backend/app/domains/` owns a written boundary: what it is for
 | identity | planned | No login or session |
 | accounts | planned | No ledger and no custody |
 | connections | planned | No exchange connection |
-| market_data | foundation | Public BTC/USDT spot observations. No indicators. |
-| market_intelligence | planned | No interpretation |
+| market_data | foundation | Public BTC/USDT spot observations. No indicators stored on candles. |
+| market_intelligence | foundation | Phase 3A deterministic technical evidence from those candles. |
 | strategies | planned | No stored or compiled strategy |
 | quant | planned | No backtest or probability model |
 | regimes | planned | No regime model |
@@ -75,15 +76,17 @@ The AI package is scanned by test to ensure it does not reference the gateway, t
 | GET | `/api/v1/market-data/status` | Stored BTC/USDT coverage, freshness, stream disconnected. |
 | GET | `/api/v1/market-data/candles` | Verified candles in UTC order. Empty list when none are stored. |
 | GET | `/api/v1/market-data/latest` | Newest verified trade or closed candle, or an explicit empty price. |
+| GET | `/api/v1/technical-evidence` | Stored technical evidence. Empty detail when none is stored. |
+| GET | `/api/v1/technical-evidence/latest` | Newest stored evidence for one type and interval. |
 | GET | `/docs`, `/openapi.json` | Present when `APP_ENV` is `local` or `test`. Absent in `production`. |
 
 CORS allows GET and OPTIONS from the configured origins only. Credentials are not allowed. There is no cookie session.
 
 ## Persistence
 
-SQLAlchemy 2 and Alembic are wired. Revision `20261014_0001` creates no domain tables. Revision `20261015_0002` adds the market-observation tables. Strategies, orders, and audit rows are still absent. See `docs/DATA_ARCHITECTURE.md`.
+SQLAlchemy 2 and Alembic are wired. Revision `20261014_0001` creates no domain tables. Revision `20261015_0002` adds the market-observation tables. Revision `20261016_0003` adds `technical_evidence`. Strategies, orders, and audit rows are still absent. See `docs/DATA_ARCHITECTURE.md`.
 
-Public ingestion is a manual command, not a background worker. The read API serves stored rows and does not call Binance during a request.
+Public ingestion is a manual command, not a background worker. The read API serves stored rows and does not call Binance during a request. Technical-evidence routes only read stored evidence. They do not calculate and they do not fetch candles from the provider.
 
 ## Web application
 

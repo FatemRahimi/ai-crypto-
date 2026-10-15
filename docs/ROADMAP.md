@@ -38,6 +38,8 @@ Exit: a local replay or a public market-data source can be queried, and every se
 
 Goal: deterministic evidence objects for structure, market profile, order flow, and derivatives.
 
+Phase 3A is the technical slice only. It calculates structure, support and resistance, range statistics, and candle-proxy VWAP from verified candles. Market profile, order flow, and derivatives are not part of 3A, because their required inputs are not stored.
+
 Deliver: named calculators whose inputs are Phase 2 records. Each output stores inputs, parameters, and code version. The research page opens a section only when that section has records.
 
 Exit: a BTC view can show support, profile nodes, or funding only when the calculator produced them. No LLM commentary is stored as a measurement.
