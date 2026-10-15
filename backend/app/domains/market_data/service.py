@@ -21,7 +21,6 @@ from app.domains.market_data.quality import (
     Rejection,
     candle_freshness,
     detect_candle_gaps,
-    find_duplicate_open_times,
     trade_freshness,
 )
 from app.domains.market_data.records import CanonicalCandle
@@ -110,10 +109,9 @@ class MarketDataService:
                 )
                 continue
             accepted.append(normalized)
-        duplicate_times = find_duplicate_open_times([item.open_time for item in accepted])
-        unique = [item for item in accepted if item.open_time not in duplicate_times]
-        rejected += len(accepted) - len(unique)
-        gaps = detect_candle_gaps(interval, [item.open_time for item in unique])
+        retained, batch_duplicates, conflicts = _partition_valid_candles(accepted)
+        rejected += conflicts
+        gaps = detect_candle_gaps(interval, [item.open_time for item in retained])
         if gaps:
             logger.info(
                 "market_data_gap_detected provider=%s interval=%s gaps=%s",
@@ -124,11 +122,11 @@ class MarketDataService:
         with self._sessions() as session:
             repository = MarketRepository(session)
             market_id = repository.ensure_market(self.identity)
-            counts = repository.insert_candles(market_id, unique)
+            counts = repository.insert_candles(market_id, retained)
             session.commit()
         return IngestReport(
             inserted=counts.inserted,
-            duplicates=counts.duplicates + (len(accepted) - len(unique)),
+            duplicates=counts.duplicates + batch_duplicates,
             rejected=rejected,
             gaps=len(gaps),
         )
@@ -271,6 +269,59 @@ class MarketDataService:
                 kind,
                 self.identity.provider_symbol,
             )
+
+
+def _partition_valid_candles(
+    candles: list[CanonicalCandle],
+) -> tuple[list[CanonicalCandle], int, int]:
+    """Keep one candle per open time.
+
+    Identical copies count as duplicates. If the same open time has different
+    OHLCV content, every copy is rejected and none is stored.
+    """
+    groups: dict[datetime, list[CanonicalCandle]] = {}
+    order: list[datetime] = []
+    for candle in candles:
+        bucket = groups.get(candle.open_time)
+        if bucket is None:
+            order.append(candle.open_time)
+            bucket = []
+            groups[candle.open_time] = bucket
+        bucket.append(candle)
+    retained: list[CanonicalCandle] = []
+    duplicates = 0
+    conflicts = 0
+    for open_time in order:
+        bucket = groups[open_time]
+        if _ohlcv_conflicts(bucket):
+            conflicts += len(bucket)
+            logger.info(
+                "market_data_validation_failed provider=%s kind=candle reason=%s",
+                bucket[0].provider,
+                "conflicting_candle",
+            )
+            continue
+        retained.append(bucket[0])
+        duplicates += len(bucket) - 1
+    return retained, duplicates, conflicts
+
+
+def _ohlcv_conflicts(candles: list[CanonicalCandle]) -> bool:
+    first = _ohlcv(candles[0])
+    return any(_ohlcv(candle) != first for candle in candles[1:])
+
+
+def _ohlcv(candle: CanonicalCandle) -> tuple[object, ...]:
+    return (
+        candle.close_time,
+        candle.open,
+        candle.high,
+        candle.low,
+        candle.close,
+        candle.volume,
+        candle.quote_volume,
+        candle.trade_count,
+    )
 
 
 def _report(counts: WriteCounts, *, rejected: int) -> IngestReport:
