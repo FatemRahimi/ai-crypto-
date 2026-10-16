@@ -6,6 +6,7 @@ export type TechnicalRecord = {
   calculatorVersion: string;
   parameters: Record<string, unknown>;
   inputCandleCount: number;
+  inputFingerprint: string;
   dataStatus: string;
   freshness: "fresh" | "stale" | "gap" | "insufficient" | "invalid";
   result: Record<string, unknown>;
@@ -70,6 +71,8 @@ function parseRecord(value: unknown): TechnicalRecord | null {
     typeof record.observation_time !== "string" ||
     typeof record.calculator_version !== "string" ||
     typeof record.input_candle_count !== "number" ||
+    typeof record.input_fingerprint !== "string" ||
+    record.input_fingerprint.length == 0 ||
     typeof record.data_status !== "string" ||
     typeof record.provider !== "string" ||
     typeof record.provider_symbol !== "string" ||
@@ -97,6 +100,7 @@ function parseRecord(value: unknown): TechnicalRecord | null {
     calculatorVersion: record.calculator_version,
     parameters: record.parameters as Record<string, unknown>,
     inputCandleCount: record.input_candle_count,
+    inputFingerprint: record.input_fingerprint,
     dataStatus: record.data_status,
     freshness: record.freshness,
     result: record.result as Record<string, unknown>,

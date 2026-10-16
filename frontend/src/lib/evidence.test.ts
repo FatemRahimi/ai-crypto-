@@ -18,6 +18,7 @@ const record = {
   input_open_end: "2026-10-15T12:04:00Z",
   input_candle_count: 5,
   input_candle_ids: [1, 2, 3, 4, 5],
+  input_fingerprint: "ab".repeat(32),
   result: {
     rule: "strict_fractal_confirmed_after_right_candles",
     structure: [{ label: "higher_high", price: "10" }],

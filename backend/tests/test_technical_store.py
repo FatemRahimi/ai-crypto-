@@ -8,12 +8,18 @@ import pytest
 from app.core.config import get_settings
 from app.core.database import create_db_engine
 from app.domains.market_data.identity import MarketIdentity
+from app.domains.market_data.persistence import CandleRow
 from app.domains.market_data.quality import DataStatus
 from app.domains.market_data.records import CanonicalCandle
 from app.domains.market_data.repository import MarketRepository
-from app.domains.market_intelligence.calculators import EvidenceDraft, EvidenceStatus
+from app.domains.market_intelligence.calculators import (
+    EvidenceDraft,
+    EvidenceStatus,
+    input_fingerprint,
+)
 from app.domains.market_intelligence.repository import EvidenceRepository
 from app.domains.market_intelligence.service import TechnicalEvidenceService
+from sqlalchemy import update
 from sqlalchemy.orm import Session, sessionmaker
 
 IDENTITY = MarketIdentity(
@@ -62,6 +68,7 @@ def _draft(price: str) -> EvidenceDraft:
         input_open_start=OPEN,
         input_open_end=OPEN + timedelta(minutes=9),
         input_candle_ids=(1,),
+        input_fingerprint=input_fingerprint([]),
         data_status=EvidenceStatus.VALID,
         result={"high": price, "low": "1", "range": "0", "midpoint": "1", "percentage_range": "0"},
     )
@@ -107,6 +114,7 @@ def test_recalculation_is_idempotent_and_keeps_provenance(
     assert view.freshness == "stale"
     assert view.calculator_version == "technical-evidence-v1"
     assert view.input_candle_count == 5
+    assert len(view.input_fingerprint) == 64
     assert view.observation_time == _candle(4).close_time
     assert view.observation_time != _candle(4).ingested_at
     assert view.parameters["candle_limit"] == 10
@@ -130,6 +138,46 @@ def test_gap_is_stored_without_a_filled_measurement(sessions: sessionmaker[Sessi
     assert view.input_candle_ids
 
 
+def test_changed_candle_content_is_a_new_evidence_identity(
+    sessions: sessionmaker[Session],
+) -> None:
+    with sessions() as session:
+        repository = MarketRepository(session)
+        market_id = repository.ensure_market(IDENTITY)
+        repository.insert_candles(market_id, [_candle(index) for index in range(5)])
+        session.commit()
+    service = TechnicalEvidenceService(sessions, IDENTITY)
+    first = service.calculate("range_statistics", "1m", candle_limit=10, now=OPEN)
+    original = service.latest("range_statistics", "1m", now=OPEN)
+    assert original is not None
+    with sessions() as session:
+        session.execute(
+            update(CandleRow)
+            .where(CandleRow.id == original.input_candle_ids[0])
+            .values(high=Decimal("111"))
+        )
+        session.commit()
+    second = service.calculate("range_statistics", "1m", candle_limit=10, now=OPEN)
+    updated = service.latest("range_statistics", "1m", now=OPEN)
+    assert second.inserted == 1
+    assert second.duplicates == 0
+    assert second.conflicts == 0
+    assert second.evidence_id != first.evidence_id
+    assert updated is not None
+    assert updated.observation_time == original.observation_time
+    assert updated.input_fingerprint != original.input_fingerprint
+    assert Decimal(str(updated.result["high"])) == Decimal("111")
+    assert Decimal(str(original.result["high"])) == Decimal("110")
+    with sessions() as session:
+        rows = EvidenceRepository(session).recent(IDENTITY, "1m", "range_statistics", limit=10)
+    stored = {row.input_fingerprint: row.result_json for row in rows}
+    assert original.input_fingerprint in stored
+    assert updated.input_fingerprint in stored
+    assert '"high":"110"' in stored[original.input_fingerprint] or '"high":"110.000' in stored[
+        original.input_fingerprint
+    ]
+
+
 def test_conflicting_result_is_not_replaced(sessions: sessionmaker[Session]) -> None:
     with sessions() as session:
         repository = EvidenceRepository(session)
@@ -144,3 +192,4 @@ def test_conflicting_result_is_not_replaced(sessions: sessionmaker[Session]) -> 
         stored = repository.latest(IDENTITY, "1m", "range_statistics")
         assert stored is not None
         assert '"high":"1"' in stored.result_json
+        assert stored.input_fingerprint == input_fingerprint([])

@@ -83,6 +83,7 @@ class EvidenceRepository:
         parameters = canonical_json(draft.parameters)
         result = canonical_json(draft.result)
         digest = hashlib.sha256(parameters.encode("utf-8")).hexdigest()
+        fingerprint = draft.input_fingerprint
         existing = self._existing(
             market_id,
             draft.evidence_type,
@@ -91,6 +92,7 @@ class EvidenceRepository:
             draft.calculator_name,
             draft.calculator_version,
             digest,
+            fingerprint,
         )
         if existing is not None:
             return self._same_or_conflict(existing, result, draft.data_status.value)
@@ -104,6 +106,7 @@ class EvidenceRepository:
             calculator_version=draft.calculator_version,
             parameters_json=parameters,
             parameters_hash=digest,
+            input_fingerprint=fingerprint,
             input_open_start=draft.input_open_start,
             input_open_end=draft.input_open_end,
             input_candle_count=len(draft.input_candle_ids),
@@ -125,6 +128,7 @@ class EvidenceRepository:
                 draft.calculator_name,
                 draft.calculator_version,
                 digest,
+                fingerprint,
             )
             if raced is None:
                 raise
@@ -190,6 +194,7 @@ class EvidenceRepository:
         calculator_name: str,
         calculator_version: str,
         parameters_hash: str,
+        input_fingerprint: str,
     ) -> TechnicalEvidenceRow | None:
         return self._session.scalar(
             select(TechnicalEvidenceRow).where(
@@ -200,6 +205,7 @@ class EvidenceRepository:
                 TechnicalEvidenceRow.calculator_name == calculator_name,
                 TechnicalEvidenceRow.calculator_version == calculator_version,
                 TechnicalEvidenceRow.parameters_hash == parameters_hash,
+                TechnicalEvidenceRow.input_fingerprint == input_fingerprint,
             )
         )
 

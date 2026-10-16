@@ -67,6 +67,7 @@ class EvidenceResponse(BaseModel):
     input_open_end: datetime
     input_candle_count: int
     input_candle_ids: list[int]
+    input_fingerprint: str
     result: dict[str, JsonValue]
     data_status: Literal["VALID", "GAP_DETECTED", "INSUFFICIENT", "INVALID"]
     freshness: Literal["fresh", "stale", "gap", "insufficient", "invalid"]
@@ -169,6 +170,7 @@ def _record(row: EvidenceView) -> EvidenceResponse:
         input_open_end=as_utc(row.input_open_end),
         input_candle_count=row.input_candle_count,
         input_candle_ids=row.input_candle_ids,
+        input_fingerprint=row.input_fingerprint,
         result=_json_object(row.result),
         data_status=_status(row.data_status),
         freshness=_freshness(row.freshness),
