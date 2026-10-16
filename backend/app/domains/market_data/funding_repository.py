@@ -58,6 +58,8 @@ class FundingRepository:
                 duplicates += 1
             else:
                 conflicts += 1
+        if conflicts:
+            return FundingWriteCounts(inserted=0, duplicates=duplicates, conflicts=conflicts)
         if fresh:
             self._session.add_all(
                 [

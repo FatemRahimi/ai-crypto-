@@ -280,6 +280,76 @@ def test_conflict_does_not_replace_the_stored_rate(sessions: sessionmaker[Sessio
         assert stored[0].funding_rate == Decimal("0.10000000")
 
 
+def test_persisted_conflict_rejects_the_whole_observation_set(
+    sessions: sessionmaker[Session],
+) -> None:
+    seeded = FundingDataService(
+        sessions,
+        ScriptedFunding(_retrieval([_row(FIRST_MS, "0.10000000")])),
+    )
+    seeded.ingest(start=START, end=END, now=NOW)
+    mixed = FundingDataService(
+        sessions,
+        ScriptedFunding(
+            _retrieval(
+                [
+                    _row(FIRST_MS, "0.20000000"),
+                    _row(SECOND_MS, "0.30000000"),
+                ]
+            )
+        ),
+    )
+    report = mixed.ingest(start=START, end=END, now=NOW)
+    assert report.completeness.value == "INVALID"
+    assert report.conflicts >= 1
+    assert report.inserted == 0
+    with sessions() as session:
+        rows = session.scalars(
+            select(FundingObservationRow).where(
+                FundingObservationRow.funding_time.in_([START, END])
+            )
+        ).all()
+        assert len(rows) == 1
+        assert rows[0].funding_time == START
+        assert rows[0].funding_rate == Decimal("0.10000000")
+
+
+def test_duplicate_plus_fresh_row_inserts_only_the_new_observation(
+    sessions: sessionmaker[Session],
+) -> None:
+    seeded = FundingDataService(
+        sessions,
+        ScriptedFunding(_retrieval([_row(FIRST_MS, "0.10000000")])),
+    )
+    seeded.ingest(start=START, end=END, now=NOW)
+    extended = FundingDataService(
+        sessions,
+        ScriptedFunding(
+            _retrieval(
+                [
+                    _row(FIRST_MS, "0.10000000"),
+                    _row(SECOND_MS, "0.30000000"),
+                ]
+            )
+        ),
+    )
+    report = extended.ingest(start=START, end=END, now=NOW)
+    assert report.completeness.value == "COMPLETENESS_UNKNOWN"
+    assert report.conflicts == 0
+    assert report.duplicates >= 1
+    assert report.inserted == 1
+    with sessions() as session:
+        rows = session.scalars(
+            select(FundingObservationRow)
+            .where(FundingObservationRow.funding_time.in_([START, END]))
+            .order_by(FundingObservationRow.funding_time.asc())
+        ).all()
+        assert [row.funding_rate for row in rows] == [
+            Decimal("0.10000000"),
+            Decimal("0.30000000"),
+        ]
+
+
 def test_empty_window_stores_no_zero_rate(sessions: sessionmaker[Session]) -> None:
     service = FundingDataService(sessions, ScriptedFunding(_retrieval([], stop="empty")))
     report = service.ingest(start=START, end=END, now=NOW)
