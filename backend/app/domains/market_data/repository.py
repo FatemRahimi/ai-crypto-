@@ -360,6 +360,28 @@ class MarketRepository:
             ).limit(1)
         )
 
+    def aggregate_windows_for_exact_bounds(
+        self,
+        identity: MarketIdentity,
+        start: datetime,
+        end: datetime,
+    ) -> list[AggregateTradeWindowRow]:
+        """Every report for this exact request. Callers must not keep only the newest."""
+        market_id = self._market_id(identity)
+        if market_id is None:
+            return []
+        return list(
+            self._session.scalars(
+                select(AggregateTradeWindowRow)
+                .where(
+                    AggregateTradeWindowRow.market_id == market_id,
+                    AggregateTradeWindowRow.requested_start == start,
+                    AggregateTradeWindowRow.requested_end == end,
+                )
+                .order_by(AggregateTradeWindowRow.id.asc())
+            ).all()
+        )
+
     def count_aggregate_trades(self, identity: MarketIdentity) -> int:
         market_id = self._market_id(identity)
         if market_id is None:
