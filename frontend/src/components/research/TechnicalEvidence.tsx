@@ -53,7 +53,7 @@ export function TechnicalEvidence() {
           <p className="text-muted mt-2 text-sm">
             Source {record.provider} {record.providerSymbol}. Observation {record.observationTime}.
             Calculator {record.calculatorVersion}. {freshnessText(record.freshness)} Inputs{" "}
-            {record.inputCandleCount}.
+            {record.inputCandleCount}. Input fingerprint {record.inputFingerprint}.
           </p>
         </article>
       ))}

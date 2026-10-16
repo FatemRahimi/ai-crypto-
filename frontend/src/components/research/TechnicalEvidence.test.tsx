@@ -41,6 +41,7 @@ describe("TechnicalEvidence", () => {
               calculator_version: "technical-evidence-v1",
               parameters: { left: 1, right: 1 },
               input_candle_count: 5,
+              input_fingerprint: "ab".repeat(32),
               data_status: "VALID",
               freshness: "stale",
               result: { structure: [{ label: "higher_high", price: "10" }] },

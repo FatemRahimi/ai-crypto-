@@ -126,3 +126,10 @@ Date: 2026-10-16
 Status: accepted
 
 Technical evidence is calculated only from verified Phase 2 candles and stored in `technical_evidence`, not on the candle rows. The first calculators are strict confirmed pivots, structure labels, exact pivot support and resistance, range statistics, and a candle-proxy VWAP. A pivot waits for its later candles. Gaps are not filled. Recalculation of the same inputs, parameters, and calculator version does not create another row. The read API does not call the provider or run a calculator. No language-model measurement, probability, or trade recommendation is produced. Market profile, order flow, and derivatives stay unimplemented. Execution stays disabled and custody stays none.
+
+## D018 — Evidence identity includes the candle-content fingerprint
+
+Date: 2026-10-16
+Status: accepted
+
+The first evidence identity omitted the candle values. A corrected candle at the same observation time could collide with the old result and keep it as a conflict. Each calculation now stores a SHA-256 of the canonical candle id, timestamps, and OHLC volume. The same fingerprint is a duplicate, or a conflict if the result payload disagrees. A new fingerprint inserts another row and leaves the previous evidence unchanged.

@@ -6,6 +6,8 @@ These functions do not emit a trade direction, a probability, or a price forecas
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -62,6 +64,7 @@ class EvidenceDraft:
     input_open_start: datetime | None
     input_open_end: datetime | None
     input_candle_ids: tuple[int, ...]
+    input_fingerprint: str
     data_status: EvidenceStatus
     result: dict[str, object]
 
@@ -86,6 +89,26 @@ def evaluate(
     if evidence_type == "range_statistics":
         return _range(ordered, stored)
     return _vwap(ordered, stored)
+
+
+def input_fingerprint(candles: list[InputCandle]) -> str:
+    """SHA-256 of canonical candle content. This is not Python hash()."""
+    ordered = sorted(candles, key=_fingerprint_order)
+    payload = [
+        {
+            "candle_id": candle.candle_id,
+            "open_time": _iso(candle.open_time),
+            "close_time": _iso(candle.close_time),
+            "open": _fingerprint_decimal(candle.open),
+            "high": _fingerprint_decimal(candle.high),
+            "low": _fingerprint_decimal(candle.low),
+            "close": _fingerprint_decimal(candle.close),
+            "volume": _fingerprint_decimal(candle.volume),
+        }
+        for candle in ordered
+    ]
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
 def parameter_set(
@@ -383,6 +406,7 @@ def _draft(
         input_open_start=ordered[0].open_time if ordered else None,
         input_open_end=ordered[-1].open_time if ordered else None,
         input_candle_ids=tuple(candle.candle_id for candle in ordered),
+        input_fingerprint=input_fingerprint(ordered),
         data_status=status,
         result=result,
     )
@@ -407,6 +431,17 @@ def _lookback(parameters: dict[str, object], name: str) -> int:
 
 def _decimal_text(value: Decimal) -> str:
     return format(value, "f")
+
+
+def _fingerprint_decimal(value: Decimal) -> str:
+    return format(value.quantize(Decimal("1e-18")), "f")
+
+
+def _fingerprint_order(candle: InputCandle) -> tuple[datetime, int]:
+    opened = ensure_utc(candle.open_time)
+    if not isinstance(opened, datetime):
+        raise ValueError("timestamp must be timezone-aware")
+    return (opened, candle.candle_id)
 
 
 def _iso(value: datetime) -> str:

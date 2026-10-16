@@ -30,6 +30,7 @@ class TechnicalEvidenceRow(Base):
             "calculator_name",
             "calculator_version",
             "parameters_hash",
+            "input_fingerprint",
             name="uq_technical_evidence_identity",
         ),
         CheckConstraint(
@@ -60,6 +61,7 @@ class TechnicalEvidenceRow(Base):
     calculator_version: Mapped[str] = mapped_column(String(64), nullable=False)
     parameters_json: Mapped[str] = mapped_column(Text, nullable=False)
     parameters_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    input_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     input_open_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     input_open_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     input_candle_count: Mapped[int] = mapped_column(Integer, nullable=False)

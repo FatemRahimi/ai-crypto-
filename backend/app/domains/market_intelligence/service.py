@@ -57,6 +57,7 @@ class EvidenceView:
     input_open_end: datetime
     input_candle_count: int
     input_candle_ids: list[int]
+    input_fingerprint: str
     result: dict[str, object]
     data_status: str
     freshness: str
@@ -271,6 +272,7 @@ def _view(row: TechnicalEvidenceRow, identity: MarketIdentity, now: datetime) ->
         input_open_end=row.input_open_end,
         input_candle_count=row.input_candle_count,
         input_candle_ids=[int(item) for item in candle_ids],
+        input_fingerprint=row.input_fingerprint,
         result=result,
         data_status=row.data_status,
         freshness=evidence_freshness(row.data_status, row.observation_time, row.interval, now),

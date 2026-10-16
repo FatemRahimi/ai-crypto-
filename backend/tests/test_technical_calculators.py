@@ -8,6 +8,7 @@ from app.domains.market_intelligence.calculators import (
     EvidenceStatus,
     InputCandle,
     evaluate,
+    input_fingerprint,
 )
 from app.domains.market_intelligence.service import evidence_freshness
 
@@ -197,6 +198,26 @@ def test_repeated_calculation_matches_and_bad_clocks_are_rejected() -> None:
     assert draft.observation_time is not None
     assert draft.observation_time.utcoffset() == timedelta(hours=1)
     assert draft.calculator_version == CALCULATOR_VERSION
+
+
+def test_input_fingerprint_changes_only_when_candle_content_changes() -> None:
+    candle = _candle(0, "5", "1", close="1.5")
+    changed = InputCandle(
+        candle_id=candle.candle_id,
+        open_time=candle.open_time,
+        close_time=candle.close_time,
+        open=candle.open,
+        high=candle.high,
+        low=candle.low,
+        close=Decimal("1.6"),
+        volume=candle.volume,
+    )
+    assert input_fingerprint([candle]) == input_fingerprint([candle])
+    assert input_fingerprint([candle, _candle(1, "6", "1")]) == input_fingerprint(
+        [_candle(1, "6", "1"), candle]
+    )
+    assert input_fingerprint([candle]) != input_fingerprint([changed])
+    assert len(input_fingerprint([candle])) == 64
 
 
 def test_stale_observation_is_not_described_as_fresh() -> None:

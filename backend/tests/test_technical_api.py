@@ -65,6 +65,7 @@ def _view() -> EvidenceView:
         input_open_end=OPEN,
         input_candle_count=5,
         input_candle_ids=[1, 2, 3, 4, 5],
+        input_fingerprint="ab" * 32,
         result={
             "pivots": [],
             "structure": [],
@@ -104,6 +105,7 @@ def test_stored_evidence_exposes_provenance() -> None:
     assert response.status_code == 200
     assert body["calculator_version"] == "technical-evidence-v1"
     assert body["input_candle_ids"] == [1, 2, 3, 4, 5]
+    assert body["input_fingerprint"] == "ab" * 32
     assert body["freshness"] == "stale"
     assert body["provider"] == "binance_spot"
     assert "probability" not in body["result"]
