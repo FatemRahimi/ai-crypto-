@@ -17,6 +17,8 @@ BOUNDARY = DomainBoundary(
     implementation_status=ImplementationStatus.FOUNDATION,
     phase_note=(
         "Phase 3A stores deterministic technical evidence from verified candles. "
-        "No profile, order flow, derivatives, or LLM measurement."
+        "Phase 3C stores observed volume at price from stored aggregate trades. "
+        "Clock-window coverage is not claimed. No value area, order flow, "
+        "derivatives, or LLM measurement."
     ),
 )

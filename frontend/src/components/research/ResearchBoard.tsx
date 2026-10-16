@@ -1,4 +1,5 @@
 import { AggregateTradeReadiness } from "@/components/research/AggregateTradeReadiness";
+import { ObservedVolume } from "@/components/research/ObservedVolume";
 import { RESEARCH_SECTIONS } from "@/content/workspace";
 import { TechnicalEvidence } from "@/components/research/TechnicalEvidence";
 import { EmptyNote, PageHeader } from "@/components/ui/primitives";
@@ -20,7 +21,10 @@ export function ResearchBoard() {
             {section.id === "technical" ? (
               <TechnicalEvidence />
             ) : section.id === "profile" ? (
-              <AggregateTradeReadiness />
+              <>
+                <AggregateTradeReadiness />
+                <ObservedVolume />
+              </>
             ) : (
               <EmptyNote>
                 <span className="mt-3 block">No evidence connected.</span>
