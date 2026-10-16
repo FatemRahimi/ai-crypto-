@@ -1,9 +1,9 @@
 """Aggregate-trade identity, fingerprint, and completeness.
 
 Binance documents `a`, `f`, and `l` as aggregate, first, and last trade ids.
-It does not document that those integers are a gap-free ledger of every
-trade in a clock window. This module does not fill holes and does not treat
-HTTP success as coverage.
+It does not document that those integers are a gap-free ledger, or that a
+short page exhausts a clock window. Observations are recorded. They are not
+promoted to COMPLETE or GAP_DETECTED.
 """
 
 from __future__ import annotations
@@ -48,7 +48,8 @@ class PreparedAggregates:
 class CompletenessAssessment:
     status: CompletenessStatus
     reason: str
-    gaps: tuple[AggregateGap, ...]
+    gaps: tuple[AggregateGap, ...] = ()
+    observations: dict[str, object] | None = None
 
     def details(self, *, page_count: int, stop: str, saw_full_page: bool) -> dict[str, object]:
         body: dict[str, object] = {
@@ -58,6 +59,8 @@ class CompletenessAssessment:
             "saw_full_page": saw_full_page,
             "limitation": _LIMITATIONS[self.status],
         }
+        if self.observations is not None:
+            body.update(self.observations)
         if self.gaps:
             body["gaps"] = [
                 {
@@ -66,6 +69,7 @@ class CompletenessAssessment:
                 }
                 for gap in self.gaps
             ]
+            body["observed_aggregate_id_discontinuity"] = True
         return body
 
 
@@ -179,54 +183,56 @@ def assess_aggregate_completeness(
     saw_full_page: bool,
     invalid_reason: str | None = None,
 ) -> CompletenessAssessment:
-    """Classify the retrieved sequence. A 200 response is not COMPLETE."""
+    """Record what the rows show. Do not claim the clock window is complete."""
     if invalid_reason is not None:
-        return CompletenessAssessment(CompletenessStatus.INVALID, invalid_reason, ())
+        return CompletenessAssessment(CompletenessStatus.INVALID, invalid_reason)
     if not trades:
         if stop == "empty" or (stop == "short_page" and page_count == 0 and not saw_full_page):
             return CompletenessAssessment(
                 CompletenessStatus.EMPTY,
                 "provider_returned_no_rows",
-                (),
+                observations={"returned_row_count": 0},
             )
         return CompletenessAssessment(
             CompletenessStatus.COMPLETENESS_UNKNOWN,
             "no_rows_after_retrieval",
-            (),
+            observations={"returned_row_count": 0},
         )
     overlap = _overlap(trades)
     if overlap is not None:
-        return CompletenessAssessment(CompletenessStatus.INVALID, overlap, ())
+        return CompletenessAssessment(CompletenessStatus.INVALID, overlap)
     gaps = _id_gaps(trades)
-    exhaustive = stop == "short_page" and page_count == 1 and not saw_full_page
+    page_was_short = stop == "short_page" and page_count == 1 and not saw_full_page
+    observations = _observations(trades, page_was_short=page_was_short, gaps=gaps)
     if gaps:
         return CompletenessAssessment(
-            CompletenessStatus.GAP_DETECTED,
-            "aggregate_id_not_contiguous",
+            CompletenessStatus.COMPLETENESS_UNKNOWN,
+            "observed_aggregate_id_discontinuity",
             gaps,
+            observations,
         )
     if any(trade.first_trade_id != trade.last_trade_id for trade in trades):
         return CompletenessAssessment(
             CompletenessStatus.COMPLETENESS_UNKNOWN,
             "underlying_trade_id_span_is_aggregated",
-            (),
+            observations=observations,
         )
     if _underlying_hole(trades):
         return CompletenessAssessment(
             CompletenessStatus.COMPLETENESS_UNKNOWN,
             "underlying_trade_ids_are_not_contiguous",
-            (),
+            observations=observations,
         )
-    if not exhaustive:
+    if not page_was_short:
         return CompletenessAssessment(
             CompletenessStatus.COMPLETENESS_UNKNOWN,
             "response_does_not_prove_the_window",
-            (),
+            observations=observations,
         )
     return CompletenessAssessment(
-        CompletenessStatus.COMPLETE,
-        "single_short_page_contiguous_single_trade_ids",
-        (),
+        CompletenessStatus.COMPLETENESS_UNKNOWN,
+        "clock_window_coverage_not_proven",
+        observations=observations,
     )
 
 
@@ -269,6 +275,24 @@ def _invalid_sequence(
 
 def _same_content(left: CanonicalAggregateTrade, right: CanonicalAggregateTrade) -> bool:
     return left.content_fingerprint == right.content_fingerprint
+
+
+def _observations(
+    trades: tuple[CanonicalAggregateTrade, ...],
+    *,
+    page_was_short: bool,
+    gaps: tuple[AggregateGap, ...],
+) -> dict[str, object]:
+    underlying_contiguous = all(
+        trade.first_trade_id == trade.last_trade_id for trade in trades
+    ) and not _underlying_hole(trades)
+    return {
+        "returned_row_count": len(trades),
+        "page_was_short": page_was_short,
+        "observed_aggregate_ids_contiguous": not gaps,
+        "observed_aggregate_id_discontinuity": bool(gaps),
+        "observed_underlying_trade_ids_contiguous": underlying_contiguous,
+    }
 
 
 def _id_gaps(trades: tuple[CanonicalAggregateTrade, ...]) -> tuple[AggregateGap, ...]:
