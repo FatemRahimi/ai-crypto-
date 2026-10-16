@@ -3,7 +3,11 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal
 
-from app.domains.market_data.persistence import CandleRow
+from app.domains.market_data.persistence import (
+    AggregateTradeRow,
+    AggregateTradeWindowRow,
+    CandleRow,
+)
 from app.domains.market_data.quality import DataStatus
 from app.domains.market_data.service import LatestView
 from app.main import create_app
@@ -38,6 +42,27 @@ class MemoryMarket:
         del interval, now
         self.calls.append("latest")
         return self._latest
+
+    def aggregate_trades(
+        self,
+        *,
+        start: datetime | None,
+        end: datetime | None,
+        limit: int,
+    ) -> list[AggregateTradeRow]:
+        del start, end, limit
+        self.calls.append("aggregate_trades")
+        return []
+
+    def aggregate_trade_window(
+        self,
+        *,
+        start: datetime | None,
+        end: datetime | None,
+    ) -> tuple[AggregateTradeWindowRow | None, int]:
+        del start, end
+        self.calls.append("aggregate_trade_window")
+        return None, 0
 
 
 def _client(latest: LatestView) -> TestClient:

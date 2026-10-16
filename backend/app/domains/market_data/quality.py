@@ -50,6 +50,31 @@ def ensure_utc(value: datetime) -> datetime | Rejection:
     return value.astimezone(UTC)
 
 
+MONEY_SCALE = Decimal("1e-18")
+MONEY_ABS_LIMIT = Decimal("1e20")
+INT64_MAX = 2**63 - 1
+
+
+def parse_money(value: object, *, field: str) -> Decimal | Rejection:
+    """Accept a decimal string that fits numeric(38, 18) without rounding."""
+    number = parse_decimal(value, field=field)
+    if isinstance(number, Rejection):
+        return number
+    if number != number.quantize(MONEY_SCALE):
+        return Rejection(f"{field} has more than 18 decimal places")
+    if abs(number) >= MONEY_ABS_LIMIT:
+        return Rejection(f"{field} exceeds stored precision")
+    return number
+
+
+def parse_int64(value: object, *, field: str) -> int | Rejection:
+    if isinstance(value, bool) or not isinstance(value, int):
+        return Rejection(f"{field} must be an integer")
+    if value < 0 or value > INT64_MAX:
+        return Rejection(f"{field} is outside signed 64-bit range")
+    return value
+
+
 def parse_decimal(value: object, *, field: str) -> Decimal | Rejection:
     if not isinstance(value, str):
         return Rejection(f"{field} must be a decimal string")

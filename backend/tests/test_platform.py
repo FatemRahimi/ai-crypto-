@@ -61,9 +61,13 @@ def test_openapi_exposes_only_foundation_routes(app: FastAPI) -> None:
         "/api/v1/market-data/status",
         "/api/v1/market-data/candles",
         "/api/v1/market-data/latest",
+        "/api/v1/market-data/aggregate-trades",
+        "/api/v1/market-data/aggregate-trade-windows",
         "/api/v1/technical-evidence",
         "/api/v1/technical-evidence/latest",
     }
+    for operations in schema["paths"].values():
+        assert set(operations) == {"get"}
 
 
 def test_production_hides_api_docs() -> None:

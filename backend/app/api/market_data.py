@@ -2,22 +2,34 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Annotated, Literal, Protocol
+from typing import Annotated, Literal, Protocol, cast
 
 from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, JsonValue
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.errors import error_body
 from app.domains.market_data.identity import SUPPORTED_INTERVALS
-from app.domains.market_data.persistence import CandleRow
+from app.domains.market_data.persistence import (
+    AggregateTradeRow,
+    AggregateTradeWindowRow,
+    CandleRow,
+)
 from app.domains.market_data.quality import DataStatus
 from app.domains.market_data.service import LatestView
 
 IntervalName = Literal["1m", "5m", "15m", "1h", "4h", "1d"]
+CompletenessName = Literal[
+    "COMPLETE",
+    "GAP_DETECTED",
+    "EMPTY",
+    "INVALID",
+    "COMPLETENESS_UNKNOWN",
+]
 CANONICAL_SYMBOL = "BTC/USDT"
 
 
@@ -37,6 +49,23 @@ class MarketReader(Protocol):
 
     def latest(self, *, interval: str = "1m", now: datetime | None = None) -> LatestView:
         """Return the newest verified trade or closed candle."""
+
+    def aggregate_trades(
+        self,
+        *,
+        start: datetime | None,
+        end: datetime | None,
+        limit: int,
+    ) -> list[AggregateTradeRow]:
+        """Return stored aggregate trades. This does not call the provider."""
+
+    def aggregate_trade_window(
+        self,
+        *,
+        start: datetime | None,
+        end: datetime | None,
+    ) -> tuple[AggregateTradeWindowRow | None, int]:
+        """Return the latest stored window report and the stored trade count."""
 
 
 class MarketStatusResponse(BaseModel):
@@ -84,6 +113,69 @@ class CandlePageResponse(BaseModel):
     candles: list[CandleResponse]
     gap_count: int
     empty: bool
+
+
+class AggregateTradeResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: str
+    canonical_symbol: str
+    provider_symbol: str
+    market_type: str
+    aggregate_trade_id: int
+    price: str
+    quantity: str
+    event_time: datetime
+    first_trade_id: int
+    last_trade_id: int
+    buyer_is_maker: bool
+    ingested_at: datetime
+    content_fingerprint: str
+    endpoint: str
+    normalization_version: str
+
+
+class AggregateTradePageResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    canonical_symbol: str
+    trades: list[AggregateTradeResponse]
+    empty: bool
+
+
+class AggregateWindowResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    canonical_symbol: str
+    provider: str
+    provider_symbol: str
+    requested_start: datetime
+    requested_end: datetime
+    first_event_time: datetime | None
+    last_event_time: datetime | None
+    first_aggregate_id: int | None
+    last_aggregate_id: int | None
+    aggregate_trade_count: int
+    underlying_first_trade_id: int | None
+    underlying_last_trade_id: int | None
+    inserted: int
+    duplicates: int
+    conflicts: int
+    completeness: CompletenessName
+    gap_details: dict[str, JsonValue]
+    checked_at: datetime
+    input_fingerprint: str
+    endpoint: str
+    normalization_version: str
+
+
+class AggregateWindowPageResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    canonical_symbol: str
+    empty: bool
+    stored_count: int
+    window: AggregateWindowResponse | None
 
 
 class LatestResponse(BaseModel):
@@ -173,6 +265,55 @@ def register_market_routes(app: FastAPI, reader: MarketReader) -> None:
             return _store_unavailable()
         return _latest_response(latest)
 
+    @app.get(
+        "/api/v1/market-data/aggregate-trades",
+        response_model=AggregateTradePageResponse,
+    )
+    def aggregate_trades(
+        symbol: Annotated[str, Query()] = CANONICAL_SYMBOL,
+        start: Annotated[datetime | None, Query()] = None,
+        end: Annotated[datetime | None, Query()] = None,
+        limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    ) -> AggregateTradePageResponse | JSONResponse:
+        if symbol != CANONICAL_SYMBOL:
+            return _unknown_symbol()
+        if start is not None and end is not None and start > end:
+            return JSONResponse(
+                status_code=422,
+                content=error_body("validation_error", "start must be at or before end"),
+            )
+        try:
+            rows = reader.aggregate_trades(start=start, end=end, limit=limit)
+        except SQLAlchemyError:
+            return _store_unavailable()
+        return AggregateTradePageResponse(
+            canonical_symbol=CANONICAL_SYMBOL,
+            trades=[_aggregate_trade_response(row) for row in rows],
+            empty=not rows,
+        )
+
+    @app.get(
+        "/api/v1/market-data/aggregate-trade-windows",
+        response_model=AggregateWindowPageResponse,
+    )
+    def aggregate_trade_windows(
+        symbol: Annotated[str, Query()] = CANONICAL_SYMBOL,
+        start: Annotated[datetime | None, Query()] = None,
+        end: Annotated[datetime | None, Query()] = None,
+    ) -> AggregateWindowPageResponse | JSONResponse:
+        if symbol != CANONICAL_SYMBOL:
+            return _unknown_symbol()
+        try:
+            window, stored_count = reader.aggregate_trade_window(start=start, end=end)
+        except SQLAlchemyError:
+            return _store_unavailable()
+        return AggregateWindowPageResponse(
+            canonical_symbol=CANONICAL_SYMBOL,
+            empty=window is None and stored_count == 0,
+            stored_count=stored_count,
+            window=None if window is None else _aggregate_window_response(window),
+        )
+
 
 def _freshness(latest: LatestView) -> Literal["fresh", "stale", "unavailable"]:
     if latest.price is None:
@@ -234,6 +375,82 @@ def as_utc(value: datetime) -> datetime:
 
 def _decimal_text(value: Decimal) -> str:
     return format(value, "f")
+
+
+def _aggregate_trade_response(row: AggregateTradeRow) -> AggregateTradeResponse:
+    return AggregateTradeResponse(
+        provider=BTC_PROVIDER,
+        canonical_symbol=CANONICAL_SYMBOL,
+        provider_symbol="BTCUSDT",
+        market_type="spot",
+        aggregate_trade_id=row.aggregate_trade_id,
+        price=_decimal_text(row.price),
+        quantity=_decimal_text(row.quantity),
+        event_time=as_utc(row.event_time),
+        first_trade_id=row.first_trade_id,
+        last_trade_id=row.last_trade_id,
+        buyer_is_maker=row.buyer_is_maker,
+        ingested_at=as_utc(row.ingested_at),
+        content_fingerprint=row.content_fingerprint,
+        endpoint=row.endpoint,
+        normalization_version=row.normalization_version,
+    )
+
+
+def _aggregate_window_response(row: AggregateTradeWindowRow) -> AggregateWindowResponse:
+    return AggregateWindowResponse(
+        canonical_symbol=CANONICAL_SYMBOL,
+        provider=BTC_PROVIDER,
+        provider_symbol="BTCUSDT",
+        requested_start=as_utc(row.requested_start),
+        requested_end=as_utc(row.requested_end),
+        first_event_time=None if row.first_event_time is None else as_utc(row.first_event_time),
+        last_event_time=None if row.last_event_time is None else as_utc(row.last_event_time),
+        first_aggregate_id=row.first_aggregate_id,
+        last_aggregate_id=row.last_aggregate_id,
+        aggregate_trade_count=row.aggregate_trade_count,
+        underlying_first_trade_id=row.underlying_first_trade_id,
+        underlying_last_trade_id=row.underlying_last_trade_id,
+        inserted=row.inserted,
+        duplicates=row.duplicates,
+        conflicts=row.conflicts,
+        completeness=_completeness_name(row.completeness),
+        gap_details=_json_object(_gap_details(row.gap_details_json)),
+        checked_at=as_utc(row.checked_at),
+        input_fingerprint=row.input_fingerprint,
+        endpoint=row.endpoint,
+        normalization_version=row.normalization_version,
+    )
+
+
+def _completeness_name(value: str) -> CompletenessName:
+    if value == "COMPLETE":
+        return "COMPLETE"
+    if value == "GAP_DETECTED":
+        return "GAP_DETECTED"
+    if value == "EMPTY":
+        return "EMPTY"
+    if value == "INVALID":
+        return "INVALID"
+    if value == "COMPLETENESS_UNKNOWN":
+        return "COMPLETENESS_UNKNOWN"
+    raise ValueError("unknown completeness status")
+
+
+def _gap_details(raw: str | None) -> dict[str, object]:
+    if raw is None:
+        return {}
+    parsed = json.loads(raw)
+    if not isinstance(parsed, dict):
+        return {"reason": "unreadable_gap_details"}
+    return {str(key): value for key, value in parsed.items()}
+
+
+def _json_object(value: dict[str, object]) -> dict[str, JsonValue]:
+    parsed = json.loads(json.dumps(value))
+    if not isinstance(parsed, dict):
+        return {}
+    return cast(dict[str, JsonValue], parsed)
 
 
 def _unknown_symbol() -> JSONResponse:

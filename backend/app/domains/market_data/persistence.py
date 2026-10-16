@@ -15,6 +15,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -97,6 +98,82 @@ class TradeRow(Base):
     event_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     buyer_is_maker: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     ingested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    endpoint: Mapped[str] = mapped_column(String(80), nullable=False)
+    normalization_version: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
+class AggregateTradeRow(Base):
+    """Public aggregate trades. Ordinary `market_trades` rows stay a different feed."""
+
+    __tablename__ = "market_aggregate_trades"
+    __table_args__ = (
+        UniqueConstraint(
+            "market_id",
+            "aggregate_trade_id",
+            name="uq_market_aggregate_trades_identity",
+        ),
+        CheckConstraint("price > 0 AND quantity > 0", name="ck_market_aggregate_trades_positive"),
+        CheckConstraint(
+            "last_trade_id >= first_trade_id",
+            name="ck_market_aggregate_trades_id_span",
+        ),
+        Index("ix_market_aggregate_trades_time", "market_id", "event_time"),
+        Index("ix_market_aggregate_trades_id", "market_id", "aggregate_trade_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    market_id: Mapped[int] = mapped_column(ForeignKey("market_instruments.id"), nullable=False)
+    aggregate_trade_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    price: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    quantity: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    event_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    first_trade_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    last_trade_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    buyer_is_maker: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    ingested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    content_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    endpoint: Mapped[str] = mapped_column(String(80), nullable=False)
+    normalization_version: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
+class AggregateTradeWindowRow(Base):
+    """One completeness check for an explicit aggregate-trade request window."""
+
+    __tablename__ = "market_aggregate_trade_windows"
+    __table_args__ = (
+        Index(
+            "ix_market_aggregate_windows_lookup",
+            "market_id",
+            "requested_start",
+            "requested_end",
+            "checked_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    market_id: Mapped[int] = mapped_column(ForeignKey("market_instruments.id"), nullable=False)
+    requested_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    requested_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    first_event_time: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    last_event_time: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    first_aggregate_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    last_aggregate_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    aggregate_trade_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    underlying_first_trade_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    underlying_last_trade_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    inserted: Mapped[int] = mapped_column(Integer, nullable=False)
+    duplicates: Mapped[int] = mapped_column(Integer, nullable=False)
+    conflicts: Mapped[int] = mapped_column(Integer, nullable=False)
+    completeness: Mapped[str] = mapped_column(String(32), nullable=False)
+    gap_details_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    input_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     endpoint: Mapped[str] = mapped_column(String(80), nullable=False)
     normalization_version: Mapped[str] = mapped_column(String(64), nullable=False)
 

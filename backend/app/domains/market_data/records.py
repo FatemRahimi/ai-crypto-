@@ -50,6 +50,27 @@ class CanonicalTrade:
 
 
 @dataclass(frozen=True, slots=True)
+class CanonicalAggregateTrade:
+    """One public aggregate trade. This is not a candle and not an ordinary trade."""
+
+    provider: str
+    canonical_symbol: str
+    provider_symbol: str
+    market_type: str
+    aggregate_trade_id: int
+    price: Decimal
+    quantity: Decimal
+    event_time: datetime
+    first_trade_id: int
+    last_trade_id: int
+    buyer_is_maker: bool
+    ingested_at: datetime
+    content_fingerprint: str
+    endpoint: str
+    normalization_version: str
+
+
+@dataclass(frozen=True, slots=True)
 class CanonicalBook:
     provider: str
     canonical_symbol: str

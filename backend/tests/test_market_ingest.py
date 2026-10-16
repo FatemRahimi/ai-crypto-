@@ -7,6 +7,7 @@ import pytest
 from app.core.config import get_settings
 from app.core.database import create_db_engine
 from app.domains.market_data.identity import MarketIdentity
+from app.domains.market_data.providers.base import AggregateRetrieval, MarketDataProviderError
 from app.domains.market_data.service import MarketDataService
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -45,6 +46,17 @@ class ScriptedKlines:
 
     def fetch_book_ticker(self, *, provider_symbol: str) -> object:
         return {}
+
+    def fetch_aggregate_trades(
+        self,
+        *,
+        provider_symbol: str,
+        start: datetime,
+        end: datetime,
+        max_trades: int,
+    ) -> AggregateRetrieval:
+        del provider_symbol, start, end, max_trades
+        raise MarketDataProviderError("aggregate trades were not requested")
 
 
 def _kline(open_time: datetime, *, close: str = "100.5") -> list[object]:

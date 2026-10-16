@@ -5,18 +5,31 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
+from app.domains.market_data.aggregates import aggregate_trade_fingerprint
 from app.domains.market_data.identity import NORMALIZATION_VERSION, MarketIdentity
-from app.domains.market_data.providers.binance_spot import BOOK_PATH, KLINES_PATH, TRADES_PATH
+from app.domains.market_data.providers.binance_spot import (
+    AGG_TRADES_PATH,
+    BOOK_PATH,
+    KLINES_PATH,
+    TRADES_PATH,
+)
 from app.domains.market_data.quality import (
     DataStatus,
     Rejection,
     is_closed_candle,
     parse_decimal,
+    parse_int64,
     parse_millis,
+    parse_money,
     validate_candle_shape,
     validate_trade,
 )
-from app.domains.market_data.records import CanonicalBook, CanonicalCandle, CanonicalTrade
+from app.domains.market_data.records import (
+    CanonicalAggregateTrade,
+    CanonicalBook,
+    CanonicalCandle,
+    CanonicalTrade,
+)
 
 
 def normalize_kline(
@@ -135,6 +148,68 @@ def normalize_trade(
         buyer_is_maker=buyer_is_maker,
         ingested_at=ingested_at,
         endpoint=f"GET {TRADES_PATH}",
+        normalization_version=NORMALIZATION_VERSION,
+    )
+
+
+def normalize_aggregate_trade(
+    row: object,
+    identity: MarketIdentity,
+    ingested_at: datetime,
+) -> CanonicalAggregateTrade | Rejection:
+    if not isinstance(row, dict):
+        return Rejection("malformed aggregate trade")
+    aggregate_id = parse_int64(row.get("a"), field="aggregate_trade_id")
+    first_trade_id = parse_int64(row.get("f"), field="first_trade_id")
+    last_trade_id = parse_int64(row.get("l"), field="last_trade_id")
+    event_time = parse_millis(row.get("T"), field="event_time")
+    price = parse_money(row.get("p"), field="price")
+    quantity = parse_money(row.get("q"), field="quantity")
+    buyer_is_maker = row.get("m")
+    for item in (aggregate_id, first_trade_id, last_trade_id, event_time, price, quantity):
+        if isinstance(item, Rejection):
+            return item
+    assert isinstance(aggregate_id, int)
+    assert isinstance(first_trade_id, int)
+    assert isinstance(last_trade_id, int)
+    assert isinstance(event_time, datetime)
+    assert isinstance(price, Decimal)
+    assert isinstance(quantity, Decimal)
+    if not isinstance(buyer_is_maker, bool):
+        return Rejection("buyer_is_maker must be a boolean")
+    if last_trade_id < first_trade_id:
+        return Rejection("last trade id is before first trade id")
+    problem = validate_trade(
+        price=price,
+        quantity=quantity,
+        quote_quantity=None,
+        event_time=event_time,
+    )
+    if problem is not None:
+        return problem
+    return CanonicalAggregateTrade(
+        provider=identity.provider,
+        canonical_symbol=identity.canonical_symbol,
+        provider_symbol=identity.provider_symbol,
+        market_type=identity.market_type,
+        aggregate_trade_id=aggregate_id,
+        price=price,
+        quantity=quantity,
+        event_time=event_time,
+        first_trade_id=first_trade_id,
+        last_trade_id=last_trade_id,
+        buyer_is_maker=buyer_is_maker,
+        ingested_at=ingested_at,
+        content_fingerprint=aggregate_trade_fingerprint(
+            aggregate_trade_id=aggregate_id,
+            price=price,
+            quantity=quantity,
+            event_time=event_time,
+            first_trade_id=first_trade_id,
+            last_trade_id=last_trade_id,
+            buyer_is_maker=buyer_is_maker,
+        ),
+        endpoint=f"GET {AGG_TRADES_PATH}",
         normalization_version=NORMALIZATION_VERSION,
     )
 

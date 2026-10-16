@@ -14,6 +14,7 @@ BOUNDARY = DomainBoundary(
     ],
     implementation_status=ImplementationStatus.FOUNDATION,
     phase_note=(
-        "Public Binance spot BTC/USDT candles, recent trades, and book snapshots. No credentials."
+        "Public Binance spot BTC/USDT candles, recent trades, aggregate trades, "
+        "and book snapshots. No credentials."
     ),
 )

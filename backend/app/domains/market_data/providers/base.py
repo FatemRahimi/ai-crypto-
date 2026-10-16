@@ -2,12 +2,23 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol
+from typing import Literal, Protocol
 
 
 class MarketDataProviderError(Exception):
     """The public provider did not return a usable response."""
+
+
+AggregateStop = Literal["empty", "short_page", "crossed_end", "cap", "no_progress"]
+
+
+@dataclass(frozen=True, slots=True)
+class AggregateRetrieval:
+    pages: tuple[tuple[object, ...], ...]
+    stop: AggregateStop
+    saw_full_page: bool
 
 
 class MarketDataProvider(Protocol):
@@ -30,3 +41,13 @@ class MarketDataProvider(Protocol):
 
     def fetch_book_ticker(self, *, provider_symbol: str) -> object:
         """Return the current public best bid and ask."""
+
+    def fetch_aggregate_trades(
+        self,
+        *,
+        provider_symbol: str,
+        start: datetime,
+        end: datetime,
+        max_trades: int,
+    ) -> AggregateRetrieval:
+        """Return raw aggregate-trade pages for an explicit window."""

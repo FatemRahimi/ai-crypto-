@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -10,14 +11,34 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.domains.market_data.identity import MarketIdentity
-from app.domains.market_data.persistence import BookSnapshotRow, CandleRow, MarketRow, TradeRow
-from app.domains.market_data.records import CanonicalBook, CanonicalCandle, CanonicalTrade
+from app.domains.market_data.persistence import (
+    AggregateTradeRow,
+    AggregateTradeWindowRow,
+    BookSnapshotRow,
+    CandleRow,
+    MarketRow,
+    TradeRow,
+)
+from app.domains.market_data.records import (
+    CanonicalAggregateTrade,
+    CanonicalBook,
+    CanonicalCandle,
+    CanonicalTrade,
+)
 
 
 @dataclass(frozen=True, slots=True)
 class WriteCounts:
     inserted: int
     duplicates: int
+
+
+@dataclass(frozen=True, slots=True)
+class AggregateWriteCounts:
+    inserted: int
+    duplicates: int
+    conflicts: int
+    conflict_ids: tuple[int, ...]
 
 
 class MarketRepository:
@@ -183,6 +204,172 @@ class MarketRepository:
             .order_by(TradeRow.event_time.desc())
             .limit(1)
         )
+
+    def insert_aggregate_trades(
+        self,
+        market_id: int,
+        trades: list[CanonicalAggregateTrade],
+    ) -> AggregateWriteCounts:
+        if not trades:
+            return AggregateWriteCounts(inserted=0, duplicates=0, conflicts=0, conflict_ids=())
+        existing = {
+            row.aggregate_trade_id: row
+            for row in self._session.scalars(
+                select(AggregateTradeRow).where(
+                    AggregateTradeRow.market_id == market_id,
+                    AggregateTradeRow.aggregate_trade_id.in_(
+                        [trade.aggregate_trade_id for trade in trades]
+                    ),
+                )
+            ).all()
+        }
+        fresh: list[CanonicalAggregateTrade] = []
+        duplicates = 0
+        conflicts = 0
+        conflict_ids: list[int] = []
+        for trade in trades:
+            current = existing.get(trade.aggregate_trade_id)
+            if current is None:
+                fresh.append(trade)
+                continue
+            if current.content_fingerprint == trade.content_fingerprint:
+                duplicates += 1
+            else:
+                conflicts += 1
+                conflict_ids.append(trade.aggregate_trade_id)
+        if fresh:
+            self._session.add_all(
+                [
+                    AggregateTradeRow(
+                        market_id=market_id,
+                        aggregate_trade_id=trade.aggregate_trade_id,
+                        price=trade.price,
+                        quantity=trade.quantity,
+                        event_time=trade.event_time,
+                        first_trade_id=trade.first_trade_id,
+                        last_trade_id=trade.last_trade_id,
+                        buyer_is_maker=trade.buyer_is_maker,
+                        ingested_at=trade.ingested_at,
+                        content_fingerprint=trade.content_fingerprint,
+                        endpoint=trade.endpoint,
+                        normalization_version=trade.normalization_version,
+                    )
+                    for trade in fresh
+                ]
+            )
+            self._session.flush()
+        return AggregateWriteCounts(
+            inserted=len(fresh),
+            duplicates=duplicates,
+            conflicts=conflicts,
+            conflict_ids=tuple(conflict_ids),
+        )
+
+    def insert_aggregate_window(
+        self,
+        market_id: int,
+        *,
+        requested_start: datetime,
+        requested_end: datetime,
+        first_event_time: datetime | None,
+        last_event_time: datetime | None,
+        first_aggregate_id: int | None,
+        last_aggregate_id: int | None,
+        aggregate_trade_count: int,
+        underlying_first_trade_id: int | None,
+        underlying_last_trade_id: int | None,
+        inserted: int,
+        duplicates: int,
+        conflicts: int,
+        completeness: str,
+        gap_details: dict[str, object] | None,
+        checked_at: datetime,
+        input_fingerprint: str,
+        endpoint: str,
+        normalization_version: str,
+    ) -> None:
+        self._session.add(
+            AggregateTradeWindowRow(
+                market_id=market_id,
+                requested_start=requested_start,
+                requested_end=requested_end,
+                first_event_time=first_event_time,
+                last_event_time=last_event_time,
+                first_aggregate_id=first_aggregate_id,
+                last_aggregate_id=last_aggregate_id,
+                aggregate_trade_count=aggregate_trade_count,
+                underlying_first_trade_id=underlying_first_trade_id,
+                underlying_last_trade_id=underlying_last_trade_id,
+                inserted=inserted,
+                duplicates=duplicates,
+                conflicts=conflicts,
+                completeness=completeness,
+                gap_details_json=None if gap_details is None else json.dumps(gap_details),
+                checked_at=checked_at,
+                input_fingerprint=input_fingerprint,
+                endpoint=endpoint,
+                normalization_version=normalization_version,
+            )
+        )
+        self._session.flush()
+
+    def aggregate_trade_range(
+        self,
+        identity: MarketIdentity,
+        start: datetime | None,
+        end: datetime | None,
+        limit: int,
+    ) -> list[AggregateTradeRow]:
+        market_id = self._market_id(identity)
+        if market_id is None:
+            return []
+        query = select(AggregateTradeRow).where(AggregateTradeRow.market_id == market_id)
+        if start is not None:
+            query = query.where(AggregateTradeRow.event_time >= start)
+        if end is not None:
+            query = query.where(AggregateTradeRow.event_time <= end)
+        return list(
+            self._session.scalars(
+                query.order_by(
+                    AggregateTradeRow.event_time.asc(),
+                    AggregateTradeRow.aggregate_trade_id.asc(),
+                ).limit(limit)
+            ).all()
+        )
+
+    def latest_aggregate_window(
+        self,
+        identity: MarketIdentity,
+        start: datetime | None,
+        end: datetime | None,
+    ) -> AggregateTradeWindowRow | None:
+        market_id = self._market_id(identity)
+        if market_id is None:
+            return None
+        query = select(AggregateTradeWindowRow).where(
+            AggregateTradeWindowRow.market_id == market_id
+        )
+        if start is not None:
+            query = query.where(AggregateTradeWindowRow.requested_start == start)
+        if end is not None:
+            query = query.where(AggregateTradeWindowRow.requested_end == end)
+        return self._session.scalar(
+            query.order_by(
+                AggregateTradeWindowRow.checked_at.desc(),
+                AggregateTradeWindowRow.id.desc(),
+            ).limit(1)
+        )
+
+    def count_aggregate_trades(self, identity: MarketIdentity) -> int:
+        market_id = self._market_id(identity)
+        if market_id is None:
+            return 0
+        counted = self._session.scalar(
+            select(func.count())
+            .select_from(AggregateTradeRow)
+            .where(AggregateTradeRow.market_id == market_id)
+        )
+        return int(counted or 0)
 
     def count_candles(self, identity: MarketIdentity) -> int:
         market_id = self._market_id(identity)
