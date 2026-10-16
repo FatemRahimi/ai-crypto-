@@ -66,6 +66,7 @@ def test_openapi_exposes_only_foundation_routes(app: FastAPI) -> None:
         "/api/v1/technical-evidence",
         "/api/v1/technical-evidence/latest",
         "/api/v1/observed-volume",
+        "/api/v1/funding",
     }
     for operations in schema["paths"].values():
         assert set(operations) == {"get"}
