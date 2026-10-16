@@ -12,13 +12,22 @@ describe("AggregateTradeReadiness", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ canonical_symbol: "BTC/USDT", empty: true, stored_count: 0, window: null }),
+        json: async () => ({
+          canonical_symbol: "BTC/USDT",
+          empty: true,
+          stored_count: 0,
+          window: null,
+        }),
       }),
     );
     render(<AggregateTradeReadiness />);
-    expect(screen.getByText("No verified aggregate trade window")).toBeInTheDocument();
+    expect(
+      screen.getByText("No aggregate trades are stored. That is not proof the market was idle."),
+    ).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getByText("No verified aggregate trade window")).toBeInTheDocument();
+      expect(
+        screen.getByText("No aggregate trades are stored. That is not proof the market was idle."),
+      ).toBeInTheDocument();
     });
     expect(screen.queryByText(/POC|VAH|VAL|HVN|LVN/)).toBeNull();
   });
@@ -37,7 +46,11 @@ describe("AggregateTradeReadiness", () => {
       }),
     );
     render(<AggregateTradeReadiness />);
-    expect(await screen.findByText("Aggregate trade data available")).toBeInTheDocument();
-    expect(screen.queryByText(/POC|VAH|VAL|delta|CVD/)).toBeNull();
+    expect(
+      await screen.findByText(
+        "Stored observations available; clock-window completeness is not proven.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/complete dataset|no missing trades|POC|VAH|VAL|delta|CVD/i)).toBeNull();
   });
 });

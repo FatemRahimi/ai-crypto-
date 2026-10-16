@@ -294,7 +294,7 @@ def test_page_boundary_duplicate_is_stored_once(
     assert report.duplicates == 1
     assert report.conflicts == 0
     assert [row.aggregate_trade_id for row in stored] == [1, 2, 3]
-    assert report.completeness.value != "COMPLETE"
+    assert report.completeness.value == "COMPLETENESS_UNKNOWN"
 
 
 def test_reingest_is_idempotent_and_conflict_does_not_overwrite(
@@ -309,7 +309,9 @@ def test_reingest_is_idempotent_and_conflict_does_not_overwrite(
         _page([_raw(1, 10, 0, price="11.00"), _raw(2, 11, 10), _raw(3, 12, 20)]),
     ).ingest_aggregate_trades(start=START, end=END, now=NOW)
     stored = service.aggregate_trades(start=None, end=None, limit=10)
-    assert first.completeness.value == "COMPLETE"
+    assert first.completeness.value == "COMPLETENESS_UNKNOWN"
+    assert first.gap_details["page_was_short"] is True
+    assert first.gap_details["observed_aggregate_ids_contiguous"] is True
     assert first.inserted == 3
     assert second.inserted == 0
     assert second.duplicates == 3
@@ -319,7 +321,7 @@ def test_reingest_is_idempotent_and_conflict_does_not_overwrite(
     assert len(stored) == 3
 
 
-def test_contiguous_short_page_is_complete_and_a_known_id_hole_is_a_gap(
+def test_contiguous_short_page_and_id_skip_are_not_proven_coverage(
     sessions: sessionmaker[Session],
 ) -> None:
     complete = _service(
@@ -330,12 +332,18 @@ def test_contiguous_short_page_is_complete_and_a_known_id_hole_is_a_gap(
         sessions,
         _page([_raw(1, 10, 0), _raw(2, 11, 10), _raw(4, 13, 20)]),
     ).ingest_aggregate_trades(start=START, end=END, now=NOW)
-    assert complete.completeness.value == "COMPLETE"
+    assert complete.completeness.value == "COMPLETENESS_UNKNOWN"
+    assert complete.gap_details["reason"] == "clock_window_coverage_not_proven"
+    assert complete.gap_details["page_was_short"] is True
+    assert complete.gap_details["observed_aggregate_ids_contiguous"] is True
+    assert complete.gap_details["observed_underlying_trade_ids_contiguous"] is True
     assert complete.first_event_time == START
     assert complete.checked_at == NOW
     assert complete.underlying_first_trade_id == 10
     assert complete.underlying_last_trade_id == 12
-    assert gapped.completeness.value == "GAP_DETECTED"
+    assert gapped.completeness.value == "COMPLETENESS_UNKNOWN"
+    assert gapped.gap_details["observed_aggregate_id_discontinuity"] is True
+    assert gapped.gap_details["observed_aggregate_ids_contiguous"] is False
     gaps = gapped.gap_details["gaps"]
     assert isinstance(gaps, list)
     assert gaps[0]["after_aggregate_id"] == 2
@@ -372,6 +380,8 @@ def test_empty_invalid_and_unknown_are_distinct(sessions: sessionmaker[Session])
     ).ingest_aggregate_trades(start=START, end=END, now=NOW)
     assert empty.completeness.value == "EMPTY"
     assert empty.aggregate_trade_count == 0
+    assert empty.gap_details["returned_row_count"] == 0
+    assert empty.gap_details["limitation"] == "empty_response_is_not_proof_the_market_was_idle"
     assert invalid.completeness.value == "INVALID"
     assert backwards.completeness.value == "INVALID"
     assert aggregated.completeness.value == "COMPLETENESS_UNKNOWN"
@@ -499,7 +509,10 @@ def test_read_api_has_no_data_until_ingest_and_never_calls_the_provider(
     assert "poc" not in stored.text.lower()
     assert "vah" not in stored.text.lower()
     window = client.get("/api/v1/market-data/aggregate-trade-windows")
-    assert window.json()["window"]["completeness"] == "COMPLETE"
+    assert window.json()["window"]["completeness"] == "COMPLETENESS_UNKNOWN"
+    details = window.json()["window"]["gap_details"]
+    assert details["page_was_short"] is True
+    assert details["observed_aggregate_ids_contiguous"] is True
     assert window.json()["stored_count"] == 3
     assert provider.calls == 0
 

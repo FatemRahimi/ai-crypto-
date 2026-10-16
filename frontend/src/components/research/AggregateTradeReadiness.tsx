@@ -35,10 +35,18 @@ export function AggregateTradeReadiness() {
   }, []);
 
   if (view === "available") {
-    return <p className="text-muted mt-3 text-sm">Aggregate trade data available</p>;
+    return (
+      <p className="text-muted mt-3 text-sm">
+        Stored observations available; clock-window completeness is not proven.
+      </p>
+    );
   }
   if (view === "unavailable") {
     return <p className="text-muted mt-3 text-sm">Aggregate trade data unavailable</p>;
   }
-  return <p className="text-muted mt-3 text-sm">No verified aggregate trade window</p>;
+  return (
+    <p className="text-muted mt-3 text-sm">
+      No aggregate trades are stored. That is not proof the market was idle.
+    </p>
+  );
 }

@@ -321,9 +321,9 @@ class MarketDataService:
                 normalization_version=report.normalization_version,
             )
             session.commit()
-        if status is CompletenessStatus.GAP_DETECTED:
+        if details.get("observed_aggregate_id_discontinuity") is True:
             logger.info(
-                "market_data_gap_detected provider=%s kind=aggregate_trade gaps=%s",
+                "market_data_aggregate_id_discontinuity_observed provider=%s count=%s",
                 self.identity.provider,
                 len(assessment.gaps),
             )
