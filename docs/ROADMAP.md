@@ -21,7 +21,11 @@ Exit: tests, type checks, and the production build pass. No order can be submitt
 
 ## Phase 2 — Market data layer
 
-Goal: verified BTC perpetual observations with source, symbol, timestamp, and granularity.
+Status: closed. Merge `f30c4cbb4565857f463b6094d036cfbb8574f857`.
+
+Goal, as originally written: verified BTC perpetual observations with source, symbol, timestamp, and granularity.
+
+What shipped: public spot BTC/USDT only (`BTC/USDT`, provider `binance_spot`). Perpetual candles were not stored. USD-M perpetual funding is the closed Phase 3D slice and uses a separate identity, `BTCUSDT-PERP`. See D016 and D019.
 
 Deliver:
 
@@ -36,9 +40,20 @@ Exit: a local replay or a public market-data source can be queried, and every se
 
 ## Phase 3 — Technical, profile, and derivatives evidence
 
+Status: the phase is not closed. The slices below are closed on main. No Phase 3E is defined or approved.
+
 Goal: deterministic evidence objects for structure, market profile, order flow, and derivatives.
 
-Phase 3A is the technical slice only. It calculates structure, support and resistance, range statistics, and candle-proxy VWAP from verified candles. Market profile, order flow, and derivatives are not part of 3A, because their required inputs are not stored.
+Closed slices:
+
+- 3A — deterministic technical evidence from verified spot candles. Merge `649ac5227276e782e759670615d3faf5a0f2e9c7`.
+- 3B — spot aggregate-trade storage. Clock-window completeness is not claimed. Completeness semantic fix merge `b4903c5f72c3d0a327ab6a7ae6411e59fc5e434c`.
+- 3C — observed volume at exact price and an observed POC from stored aggregate trades. Merge `cd716281f35457159c1fb36e250b2cb559cf67d7`.
+- 3D — public BTCUSDT USD-M perpetual funding observations. Merge `98f8c65235385028c20ef05d449637b9b0af8944`.
+
+Market profile value area, order flow, open interest, basis, liquidations, and the rest of this phase goal are not implemented. Naming them here does not approve a next slice.
+
+Phase 3A is the technical slice only. It calculates structure, support and resistance, range statistics, and candle-proxy VWAP from verified candles. Market profile, order flow, and derivatives were not part of 3A. Funding, added later in 3D, is funding history only. It is not a directional derivative signal.
 
 Deliver: named calculators whose inputs are Phase 2 records. Each output stores inputs, parameters, and code version. The research page opens a section only when that section has records.
 
