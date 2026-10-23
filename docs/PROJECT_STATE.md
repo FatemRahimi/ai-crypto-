@@ -32,16 +32,18 @@ These files still describe an earlier repository. Where they disagree with the c
 
 | Document | Conflict with the checkpoint |
 | --- | --- |
-| `README.md` | Still calls the repository a Phase 1 foundation that does not display market data. The home page can show a stored spot price. Alembic text stops at technical evidence. |
-| `docs/ARCHITECTURE.md` | Domain table and route table omit aggregate trades, observed volume, and funding. It still says market data is spot-only. |
-| `docs/DATA_ARCHITECTURE.md` | Stops at Phase 3A. Later tables exist. |
-| `docs/UI_UX.md` | Says every research group has no evidence connected. Technical, observed-volume, and funding panels now read stored APIs. |
+| `README.md` | Still calls the repository a Phase 1 foundation. It says Phase 1 does not display live market data. The home page can show a stored spot latest price. That price is not a live feed. The Alembic paragraph stops at the technical-evidence table. |
+| `docs/ARCHITECTURE.md` | The domain table still says market data is spot-only and describes market intelligence as Phase 3A only. The route table and the persistence paragraph stop before aggregate trades, observed volume, and funding. It also says there is no business logic behind the domain packages, and that the home answers include "no verified market data." Both of those sentences are stale. `backend/app/domains/market_data/__init__.py` already names spot plus USD-M funding. |
+| `docs/DATA_ARCHITECTURE.md` | The Phase 2 portion matches the spot candle, trade, and book path. The document stops at Phase 3A and says derivatives are not implemented. Funding, aggregate trades, and observed volume exist. |
+| `docs/UI_UX.md` | Home question 1 is still "No verified market data." It also says every research group says that no evidence is connected. The home page can show a stored spot price. Technical, observed-volume, and funding panels now read stored APIs. |
 | `docs/QUANT_ARCHITECTURE.md` | The "Phase 1 limit" says no statistic is computed. That is true of the quant domain. It is not true of the evidence calculators. |
 | `docs/ROADMAP.md` | The original Phase 2 goal said perpetual observations. What shipped was spot. A short verified-delivery note was added in the continuity commit. The rest of the roadmap was left in place. |
 | `backend/app/core/constitution.py` | `PHASE` is still the literal `1`. That is the platform flag, not the product roadmap cursor. |
-| `backend/app/domains/market_intelligence/__init__.py` | The phase note still says derivatives are absent. Funding lives under `market_data`, not under this package. |
+| `backend/app/domains/market_intelligence/__init__.py` | The phase note mentions 3A and 3C, then says derivatives are absent. Funding lives under `market_data`, not under this package. |
+| `frontend/src/components/research/ResearchBoard.tsx` | The page summary still says the other sections have no data source. The Market Profile and Derivatives sections read stored aggregate-trade, observed-volume, and funding APIs. Order flow, fundamental, and quant still say no evidence is connected. |
+| `frontend/src/components/home/ChartWorkspace.tsx` | The frame says "No feed" and "No verified series." Stored candles can exist. This frame does not plot them. |
 
-`docs/PROJECT_CONSTITUTION.md` and `docs/SECURITY.md` still match the security invariants. `docs/DECISION_LOG.md` D001–D018 were already on this checkpoint. D017's line that derivatives stay unimplemented is the Phase 3A record. D023 later records funding only.
+`docs/PROJECT_CONSTITUTION.md` and `docs/SECURITY.md` still match the security invariants. `docs/DECISION_LOG.md` D001–D018 were already on this checkpoint. D006's sentence that research uses empty states is the Phase 1 decision. The research page now reads stored evidence for the families in section 6. D017's line that derivatives stay unimplemented is the Phase 3A record. D023 later records funding only.
 
 ## 2. Product Definition
 
@@ -65,9 +67,9 @@ Not implemented: regime classification, quant validation runs, strategy compilat
 
 ## 3. Core Principles
 
-From `docs/PROJECT_CONSTITUTION.md` and `backend/app/domains/pipeline.py`:
+`docs/PROJECT_CONSTITUTION.md` and `backend/app/core/constitution.py` state: No evidence → no claim. `authorize_execution` raises that sentence when evidence is missing. It authorizes only `long` or `short`, and only when quant status is `passed`. `wait` and `no_trade` cannot become an execution intent.
 
-No Evidence → No Claim.
+The extended chain below is the product rule. Only the first link and the authorization choke point exist in code. There is no quant runner that implements "validated edge":
 
 No Evidence → No Claim → No Validated Edge → No Trade.
 
@@ -120,7 +122,7 @@ Phase 3E does not exist in this repository. Do not invent it.
 
 Repository Alembic head is `20261017_0007`. Chain: `20261014_0001` → `20261015_0002` → `20261016_0003` → `20261016_0004` → `20261016_0005` → `20261016_0006` → `20261017_0007`.
 
-Later roadmap phases 4 through 13, and the identity gate before any exchange connection, are not started. Their domain packages are `planned` or, for risk and execution, `disabled`.
+Later roadmap phases 4 through 13, and the identity gate before any exchange connection, are not started. The packages for those later phases are `planned`, except `risk` and `execution`, which are `disabled`. The `ai` package is `foundation` only as far as constructing a `TradeProposal`. No model is connected. That is not Phase 9.
 
 ## 6. Current Evidence Inventory
 
@@ -134,7 +136,7 @@ Identity: provider `binance_spot`, market type `spot`, provider symbol `BTCUSDT`
 | --- | --- | --- |
 | Candles | Closed klines for `1m`, `5m`, `15m`, `1h`, `4h`, `1d`. UTC. `numeric(38, 18)`. Invalid OHLC and open candles are rejected. | Gaps are detected and are not filled. `STALE` is computed on read. This is not a perpetual candle. |
 | Recent trades and book ticker | Optional stored rows from the Phase 2 ingest command (`market_trades`, `market_book_snapshots`). | The read API does not call the provider. Book ticker has no provider source timestamp. `buyer_is_maker` is not a buy or sell signal. The public trade websocket is not connected. D016 records continuous streaming as Phase 2.1. That stream is not implemented, and naming it is not an approval to build it next. |
-| Aggregate trades | `GET /api/v3/aggTrades` stored in `market_aggregate_trades`, separate from ordinary trades. | `CompletenessStatus` still names `COMPLETE` and `GAP_DETECTED`. `assess_aggregate_completeness` does not return either. A successful retrieval stays `COMPLETENESS_UNKNOWN`. An aggregate-id discontinuity is recorded and is not filled. An empty response is not proof the market was idle. Binance ids are not treated as a gap-free clock-window ledger. |
+| Aggregate trades | `GET /api/v3/aggTrades` stored in `market_aggregate_trades`, separate from ordinary trades. Read routes: `GET /api/v1/market-data/aggregate-trades` and `GET /api/v1/market-data/aggregate-trade-windows`. | `CompletenessStatus` still names `COMPLETE` and `GAP_DETECTED`. `assess_aggregate_completeness` does not return either. A successful retrieval stays `COMPLETENESS_UNKNOWN`, including a retrieval that stops on the row cap. An aggregate-id discontinuity is recorded and is not filled. An empty response is not proof the market was idle. Binance ids are not treated as a gap-free clock-window ledger. |
 | Swing structure | Confirmed strict pivots and higher/lower/equal labels, calculator `technical-evidence-v1`. | A pivot is not emitted until the later candles exist. Labels are not orders. A candle gap yields `GAP_DETECTED` and no filled measurement. |
 | Support / resistance | Exact prices of confirmed pivot highs and lows. `touch_count` counts pivots at that exact price. | Not a strength score, not a zone, not supply/demand, not Fibonacci. |
 | Range statistics | Max high, min low, range, midpoint, and range as a percentage of the low. | Not a volatility regime and not a forecast. |
@@ -152,7 +154,7 @@ Identity: provider `binance_usdm`, market type `perpetual`, provider symbol `BTC
 
 | Family | What exists | Limitation |
 | --- | --- | --- |
-| Historical funding | Public `GET /fapi/v1/fundingRate` on `https://fapi.binance.com`. Rows in `market_funding_observations`. Windows in `market_funding_windows`. Rate types `Regular` and `Special`. CLI `python -m app.domains.market_data.funding_cli`. Read API `GET /api/v1/funding?symbol=BTCUSDT-PERP`. | Ingest refuses to write unless exchange info confirms `contractType=PERPETUAL`. `markPrice` is not persisted. Cadence is not hard-coded. Spacing is not a gap. A missing timestamp is not inserted. An empty provider window stores no zero rate. Successful coverage stays `COMPLETENESS_UNKNOWN`. The window check constraint allows only `COMPLETENESS_UNKNOWN`, `EMPTY`, and `INVALID`. Completeness of funding history is not proven. The rate is not a long, short, crowded, bullish, or bearish claim. |
+| Historical funding | Public `GET /fapi/v1/fundingRate` on `https://fapi.binance.com`. Rows in `market_funding_observations`. Windows in `market_funding_windows`. Rate types `Regular` and `Special`. CLI `python -m app.domains.market_data.funding_cli`. Read API `GET /api/v1/funding?symbol=BTCUSDT-PERP`. | Ingest refuses to write unless exchange info confirms `contractType=PERPETUAL`. `markPrice` is not persisted. Cadence is not hard-coded. Spacing is not a gap. A missing timestamp is not inserted. An empty provider window stores no zero rate. Successful coverage stays `COMPLETENESS_UNKNOWN`. A retrieval that stops on the row cap (default 1000, hard maximum 5000) stays `COMPLETENESS_UNKNOWN`. It is not an exhaustive archive. The window check constraint allows only `COMPLETENESS_UNKNOWN`, `EMPTY`, and `INVALID`. The rate is not a long, short, crowded, bullish, or bearish claim. |
 
 Spot candles, spot trades, and observed volume must not be described as perpetual. Funding must not be described as a spot print.
 
@@ -225,11 +227,11 @@ Intended navigation, and the routes that exist today:
 
 | Route | Label | What the page actually does |
 | --- | --- | --- |
-| `/` | Home | Command center. The first answer can show a stored spot `BTC/USDT` latest price with source and freshness, or an explicit empty or unavailable state. The other command answers are still the unevaluated Phase 1 copy. Demo panels stay marked Demo. The chart frame is not a research chart. The copilot is disabled. |
+| `/` | Home | Command center. The first answer can show a stored spot `BTC/USDT` latest price with source and freshness, or an explicit empty or unavailable state. The other command answers are still the unevaluated Phase 1 copy. Demo panels stay marked Demo. The chart frame is an empty SVG. It says no feed and does not plot stored candles. The copilot is disabled. |
 | `/strategy` | Strategy | Intent form kept on the page. It does not call the network. Approve is disabled. Quant status is not run. |
 | `/opportunities` | Opportunities | State vocabulary and an empty sample card. No probabilities. |
 | `/positions` | Positions | Field list and disabled actions: hold, reduce, partial exit, exit, protect. No position book. |
-| `/research` | Research | Technical evidence, aggregate-trade readiness, observed volume, and funding read stored APIs when rows exist. Other groups say no evidence is connected. |
+| `/research` | Research | Technical evidence, aggregate-trade readiness, observed volume, and funding read stored APIs when rows exist. The page summary still says the other sections have no data source. That sentence is stale for those panels. Order flow, fundamental, and quant still say no evidence is connected. The "Market Profile" heading is a section title. The panel under it is observed volume, not a market profile. |
 | `/performance` | Performance | Empty sections. No sample equity curve. |
 | `/account` | Account | States that the platform holds no funds and has no exchange connection. Security, sessions, and audit are marked planned. No credential field. |
 
