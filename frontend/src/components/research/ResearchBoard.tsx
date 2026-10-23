@@ -1,4 +1,5 @@
 import { AggregateTradeReadiness } from "@/components/research/AggregateTradeReadiness";
+import { FundingEvidence } from "@/components/research/FundingEvidence";
 import { ObservedVolume } from "@/components/research/ObservedVolume";
 import { RESEARCH_SECTIONS } from "@/content/workspace";
 import { TechnicalEvidence } from "@/components/research/TechnicalEvidence";
@@ -25,12 +26,19 @@ export function ResearchBoard() {
                 <AggregateTradeReadiness />
                 <ObservedVolume />
               </>
+            ) : section.id === "derivatives" ? (
+              <>
+                <FundingEvidence />
+                <p className="text-muted mt-3 text-sm">
+                  Open interest, liquidations, and basis are not connected.
+                </p>
+              </>
             ) : (
               <EmptyNote>
                 <span className="mt-3 block">No evidence connected.</span>
               </EmptyNote>
             )}
-            {section.id === "profile" ? null : (
+            {section.id === "profile" || section.id === "derivatives" ? null : (
               <ul className="text-muted mt-3 list-disc space-y-1 pl-5 text-sm">
                 {section.topics.map((topic) => (
                   <li key={topic}>{topic}</li>

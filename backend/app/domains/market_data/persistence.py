@@ -178,6 +178,82 @@ class AggregateTradeWindowRow(Base):
     normalization_version: Mapped[str] = mapped_column(String(64), nullable=False)
 
 
+class FundingObservationRow(Base):
+    """One Binance USD-M funding charge. This is not a spot trade."""
+
+    __tablename__ = "market_funding_observations"
+    __table_args__ = (
+        UniqueConstraint(
+            "market_id",
+            "funding_time",
+            "rate_type",
+            name="uq_market_funding_identity",
+        ),
+        CheckConstraint(
+            "rate_type IN ('Regular', 'Special')",
+            name="ck_market_funding_rate_type",
+        ),
+        Index("ix_market_funding_time", "market_id", "funding_time"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    market_id: Mapped[int] = mapped_column(ForeignKey("market_instruments.id"), nullable=False)
+    symbol: Mapped[str] = mapped_column(String(32), nullable=False)
+    funding_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    funding_rate: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    rate_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    content_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    endpoint: Mapped[str] = mapped_column(String(80), nullable=False)
+    normalization_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    ingested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class FundingWindowRow(Base):
+    """One completeness check for an explicit funding-history request."""
+
+    __tablename__ = "market_funding_windows"
+    __table_args__ = (
+        CheckConstraint(
+            "completeness IN ('COMPLETENESS_UNKNOWN', 'EMPTY', 'INVALID')",
+            name="ck_market_funding_window_not_complete",
+        ),
+        CheckConstraint(
+            "requested_end >= requested_start",
+            name="ck_market_funding_window_bounds",
+        ),
+        Index(
+            "ix_market_funding_windows_lookup",
+            "market_id",
+            "requested_start",
+            "requested_end",
+            "checked_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    market_id: Mapped[int] = mapped_column(ForeignKey("market_instruments.id"), nullable=False)
+    requested_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    requested_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    first_funding_time: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    last_funding_time: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    row_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    inserted: Mapped[int] = mapped_column(Integer, nullable=False)
+    duplicates: Mapped[int] = mapped_column(Integer, nullable=False)
+    conflicts: Mapped[int] = mapped_column(Integer, nullable=False)
+    completeness: Mapped[str] = mapped_column(String(32), nullable=False)
+    details_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    input_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    endpoint: Mapped[str] = mapped_column(String(80), nullable=False)
+    normalization_version: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
 class BookSnapshotRow(Base):
     __tablename__ = "market_book_snapshots"
     __table_args__ = (

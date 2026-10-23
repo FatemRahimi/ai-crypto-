@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.funding import FundingReader, register_funding_routes
 from app.api.market_data import MarketReader, register_market_routes
 from app.api.observed_volume import ObservedVolumeReader, register_observed_volume_routes
 from app.api.routes import register_routes
@@ -12,6 +13,7 @@ from app.core.database import DatabaseProbe, build_database_probe
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
+from app.domains.market_data.funding_service import FundingDataService
 from app.domains.market_data.service import MarketDataService
 from app.domains.market_intelligence.observed_volume_service import ObservedVolumeService
 from app.domains.market_intelligence.service import TechnicalEvidenceService
@@ -23,6 +25,7 @@ def create_app(
     market_data: MarketReader | None = None,
     evidence: EvidenceReader | None = None,
     observed_volume: ObservedVolumeReader | None = None,
+    funding: FundingReader | None = None,
 ) -> FastAPI:
     resolved = settings or get_settings()
     configure_logging(resolved.log_level)
@@ -52,6 +55,7 @@ def create_app(
         app,
         observed_volume or ObservedVolumeService.from_settings(resolved),
     )
+    register_funding_routes(app, funding or FundingDataService.from_settings(resolved))
     return app
 
 

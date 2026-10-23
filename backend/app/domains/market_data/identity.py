@@ -24,5 +24,15 @@ BTC_USDT_SPOT = MarketIdentity(
     canonical_symbol="BTC/USDT",
 )
 
+# USD-M perpetual. The provider symbol text matches spot BTCUSDT; the market does not.
+BTC_USDT_USD_M_PERPETUAL = MarketIdentity(
+    provider="binance_usdm",
+    market_type="perpetual",
+    base_asset="BTC",
+    quote_asset="USDT",
+    provider_symbol="BTCUSDT",
+    canonical_symbol="BTCUSDT-PERP",
+)
+
 NORMALIZATION_VERSION = "binance-public-v1"
 SUPPORTED_INTERVALS = ("1m", "5m", "15m", "1h", "4h", "1d")
